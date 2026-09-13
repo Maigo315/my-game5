@@ -38,11 +38,19 @@
       lineage: 'スライム',
       ability: '浄化',
       image: 'images/slamin.webp'
+    },
+    lily: {
+      id: 'lily',
+      name: 'リリー',
+      species: 'アルラウネ',
+      lineage: '自然',
+      ability: '栽培',
+      image: 'images/lily.webp'
     }
   };
 
   const defaultState = () => ({
-    version: 3,
+    version: 4,
     started: false,
     tutorialStep: 'collectStone',
     currentTab: 'base',
@@ -50,6 +58,8 @@
     day: 1,
     timeIndex: 0,
     resources: { wood: 0, stone: 0 },
+    items: { matari: 0 },
+    tasks: { cultivation: null },
     stats: { development: 0, cleanliness: 0, liveliness: 0 },
     assignments: { plaza: [], well: [] },
     flags: {
@@ -60,6 +70,12 @@
       slaminEventReady: false,
       slaminJoined: false,
       slaminAssignedToWell: false,
+      lilyEventReady: false,
+      lilyJoined: false,
+      matariReceived: false,
+      cultivationStarted: false,
+      cultivationReady: false,
+      cultivationHarvested: false,
       sliceComplete: false
     },
     saveStamp: null
@@ -86,6 +102,16 @@
     { speaker: 'スラミン', text: 'いいよ！ 井戸のお掃除なら得意だよ。\nぴかぴかにしてあげる！', char: 'slamin' }
   ];
 
+  const LILY_EVENT = [
+    { speaker: 'シャノン', text: 'あれ？ 広場に誰か来てるみたい。', char: 'shannon' },
+    { speaker: '？？？', text: 'ここ、前よりずっと空気が澄んでる。\nきれいな水の気配もするわ。', char: 'lily' },
+    { speaker: 'リリー', text: '私はリリー。アルラウネよ。\n植物を育てることなら、少し自信があるの。', char: 'lily' },
+    { speaker: 'シャノン', text: 'それなら、ここで一緒に暮らさない？\nちょうど植物のことで頼みたいこともあるんだ。', char: 'shannon' },
+    { speaker: 'リリー', text: 'ええ。面白そうね。力を貸すわ。', char: 'lily' },
+    { speaker: 'シャノン', text: 'そうだ。私が持ってた「マタリの実」がひとつ残ってるの。\nリリーなら増やせるかな？', char: 'shannon' },
+    { speaker: 'リリー', text: 'もちろん。預けてくれれば、次の朝には増やしてみせるわ。', char: 'lily' }
+  ];
+
   function save(auto = true) {
     recalculateStats();
     state.saveStamp = new Date().toISOString();
@@ -101,6 +127,8 @@
       const fresh = defaultState();
       state = { ...fresh, ...parsed };
       state.resources = { ...fresh.resources, ...(parsed.resources || {}) };
+      state.items = { ...fresh.items, ...(parsed.items || {}) };
+      state.tasks = { ...fresh.tasks, ...(parsed.tasks || {}) };
       state.stats = { ...fresh.stats, ...(parsed.stats || {}) };
       state.flags = { ...fresh.flags, ...(parsed.flags || {}) };
       state.assignments = {
@@ -113,9 +141,13 @@
       if (parsed.flags?.slaminAssignedToWell && !state.assignments.well.includes('slamin')) {
         state.assignments.well = ['slamin'];
       }
-      state.version = 3;
+      state.version = 4;
       recalculateStats();
       if (!parsed.tutorialStep) state.tutorialStep = deriveTutorialStep();
+      if ((parsed.version || 0) < 4 && state.flags.slaminAssignedToWell && !state.flags.lilyJoined) {
+        state.tutorialStep = 'waitLily';
+        state.flags.sliceComplete = false;
+      }
       return true;
     } catch (err) {
       console.warn('Save load failed', err);
@@ -144,9 +176,15 @@
   }
 
   function currentTimeName() { return TIME_NAMES[state.timeIndex]; }
+  function foodCount() { return state.items.matari || 0; }
 
   function deriveTutorialStep() {
-    if (state.flags.slaminAssignedToWell || state.flags.sliceComplete) return 'complete';
+    if (state.flags.cultivationHarvested || state.flags.sliceComplete) return 'complete';
+    if (state.flags.cultivationReady) return 'harvestCultivation';
+    if (state.flags.cultivationStarted) return 'waitCultivation';
+    if (state.flags.lilyJoined) return 'startCultivation';
+    if (state.flags.lilyEventReady) return 'meetLily';
+    if (state.flags.slaminAssignedToWell) return 'waitLily';
     if (state.flags.slaminJoined) return 'assignSlamin';
     if (state.flags.slaminEventReady) return 'meetSlamin';
     if (state.flags.wellBuilt) return 'sleepAfterWell';
@@ -161,6 +199,7 @@
   function joinedResidentIds() {
     const ids = [];
     if (state.flags.slaminJoined) ids.push('slamin');
+    if (state.flags.lilyJoined) ids.push('lily');
     return ids;
   }
 
@@ -189,10 +228,6 @@
     if (hasAbilityAtFacility('plaza', '盛り上げ')) state.stats.liveliness += 20;
 
     state.flags.slaminAssignedToWell = (state.assignments.well || []).includes('slamin');
-    if (state.flags.slaminAssignedToWell) {
-      state.flags.sliceComplete = true;
-      if (state.tutorialStep === 'assignSlamin') state.tutorialStep = 'complete';
-    }
   }
 
   function assignResident(residentId, facilityId) {
@@ -209,6 +244,9 @@
     });
     state.assignments[facilityId].push(residentId);
     recalculateStats();
+    if (residentId === 'slamin' && facilityId === 'well' && state.tutorialStep === 'assignSlamin') {
+      setTutorialStep('waitLily');
+    }
     save(true);
     return true;
   }
@@ -237,6 +275,18 @@
       state.flags.slaminEventReady = true;
       setTutorialStep('meetSlamin');
     }
+
+    if (state.tutorialStep === 'waitLily' && state.stats.cleanliness >= 10 && !state.flags.lilyJoined) {
+      state.flags.lilyEventReady = true;
+      setTutorialStep('meetLily');
+    }
+
+    const cultivation = state.tasks.cultivation;
+    if (cultivation && !cultivation.ready && state.day >= cultivation.finishDay && state.timeIndex === 0) {
+      cultivation.ready = true;
+      state.flags.cultivationReady = true;
+      setTutorialStep('harvestCultivation');
+    }
   }
 
   function startNewGame() {
@@ -258,8 +308,9 @@
     let index = 0;
     const show = () => {
       const line = lines[index];
+      const dialogueImages = { shannon: 'images/shannon.webp', slamin: 'images/slamin.webp', lily: 'images/lily.webp' };
       const charHtml = line.char
-        ? `<img class="dialogue-char ${line.char === 'slamin' ? 'slamin' : ''}" src="images/${line.char === 'shannon' ? 'shannon.webp' : 'slamin.webp'}" alt="${escapeHtml(line.speaker)}">`
+        ? `<img class="dialogue-char ${line.char}" src="${dialogueImages[line.char]}" alt="${escapeHtml(line.speaker)}">`
         : '';
       app.innerHTML = `
         <section class="dialogue-screen">
@@ -288,7 +339,7 @@
         <div>
           <div class="title-kicker">MONSTER GIRL SETTLEMENT</div>
           <h1 class="title-logo">終末</h1>
-          <p class="title-sub">スマートフォン向け プロトタイプ v0.3</p>
+          <p class="title-sub">スマートフォン向け プロトタイプ v0.4</p>
         </div>
         <div class="title-actions">
           <button class="primary-btn" id="new-game">はじめから</button>
@@ -341,7 +392,7 @@
     return `<div class="resources-bar">
       <div class="resource-pill">🪵 木材 <b>${state.resources.wood}</b></div>
       <div class="resource-pill">🪨 石材 <b>${state.resources.stone}</b></div>
-      <div class="resource-pill">🍎 食料 <b>0</b></div>
+      <div class="resource-pill">🍎 食料 <b>${foodCount()}</b></div>
     </div>`;
   }
 
@@ -350,13 +401,13 @@
   }
 
   function isTutorialLocked() {
-    return ['repairWell', 'sleepAfterWell', 'meetSlamin', 'assignSlamin', 'complete'].includes(state.tutorialStep);
+    return !['free'].includes(state.tutorialStep);
   }
 
   function needsTabDot(tab) {
-    if (tab === 'actions' && ['collectStone', 'sleepAfterWell'].includes(state.tutorialStep)) return true;
+    if (tab === 'actions' && ['collectStone', 'sleepAfterWell', 'waitLily', 'waitCultivation'].includes(state.tutorialStep)) return true;
     if (tab === 'build' && state.tutorialStep === 'repairWell') return true;
-    if (tab === 'base' && ['meetSlamin', 'assignSlamin'].includes(state.tutorialStep)) return true;
+    if (tab === 'base' && ['meetSlamin', 'assignSlamin', 'meetLily', 'startCultivation', 'harvestCultivation'].includes(state.tutorialStep)) return true;
     return false;
   }
 
@@ -423,7 +474,12 @@
       if (step === 'sleepAfterWell') return '井戸の修復は完了しました。今夜は休んで、翌朝を迎えましょう。';
       if (step === 'meetSlamin') return '井戸の方から、何か妙な気配がします。❗を確認してみましょう。';
       if (step === 'assignSlamin') return 'スラミンが仲間になりました。井戸に配置して「浄化」を試しましょう。';
-      if (step === 'complete') return '最初の実装範囲はここまで。設備ページと住民配置は引き続き確認できます。';
+      if (step === 'waitLily') return '井戸の水がきれいになりました。木材を集めながら、少し時間を進めてみましょう。';
+      if (step === 'meetLily') return '広場に見慣れない魔物娘が来ています。❗を確認してみましょう。';
+      if (step === 'startCultivation') return 'リリーが仲間になりました。リリーをタップして、マタリの実の栽培をお願いしましょう。';
+      if (step === 'waitCultivation') return 'リリーがマタリの実を栽培中。翌朝になるまで待ちましょう。';
+      if (step === 'harvestCultivation') return '栽培が終わったようです。リリーからマタリの実を受け取りましょう。';
+      if (step === 'complete') return 'マタリの実の栽培に成功しました。今回の実装範囲はここまでです。';
       return '拠点の中心になる広場。シャノンはここで様子を見ています。';
     }
     if (!state.flags.wellBuilt) return '壊れた井戸。石材5個があれば修復できます。';
@@ -442,6 +498,8 @@
     const isWell = id === 'well';
     const residents = facilityResidentsForScene(id);
     const slaminEvent = isWell && state.flags.slaminEventReady && !state.flags.slaminJoined;
+    const lilyEvent = id === 'plaza' && state.flags.lilyEventReady && !state.flags.lilyJoined;
+    const lilyGuide = id === 'plaza' && state.flags.lilyJoined && ['startCultivation', 'harvestCultivation'].includes(state.tutorialStep);
 
     const mainObject = isWell
       ? `<button class="facility-object well-focus ${state.flags.wellBuilt ? '' : 'broken'}" id="facility-object" aria-label="${facilityName('well')}">
@@ -472,6 +530,8 @@
         ${shannon}
         ${characters}
         ${slaminEvent ? '<button class="event-pin event-center" id="slamin-event" aria-label="イベント">!</button>' : ''}
+        ${lilyEvent ? '<button class="event-pin event-center" id="lily-event" aria-label="リリー来訪イベント">!</button>' : ''}
+        ${lilyGuide ? `<button class="event-pin event-lily-guide" id="lily-guide" aria-label="リリーに話しかける">${state.tutorialStep === 'harvestCultivation' ? '🌱' : '!'}</button>` : ''}
 
         <div class="scene-bottom-panel">
           <div class="facility-dots">${FACILITY_ORDER.map((fid, i) => `<i class="${i === idx ? 'active' : ''}"></i>`).join('')}</div>
@@ -482,9 +542,13 @@
   }
 
   function friendsHtml() {
-    const slaminStatus = state.flags.slaminJoined
-      ? (getResidentFacility('slamin') ? `${facilityName(getResidentFacility('slamin'))}に配置中` : '拠点で待機中')
-      : '';
+    const residentStatus = id => {
+      if (id === 'lily' && state.tasks.cultivation) {
+        return state.tasks.cultivation.ready ? '栽培完了・受け取り待ち' : '栽培中（翌朝完成）';
+      }
+      const place = getResidentFacility(id);
+      return place ? `${facilityName(place)}に配置中` : '拠点で待機中';
+    };
     return `<section class="page">
       <h2 class="page-title">仲間</h2>
       <p class="page-lead">拠点にいる魔物娘と、現在の役割を確認できます。</p>
@@ -497,8 +561,14 @@
         ${state.flags.slaminJoined ? `<div class="resident-list-card static-card">
           <img src="images/slamin.webp" alt="スラミン">
           <div><div class="card-head"><span class="card-title">スラミン</span><span class="badge">スライム</span></div>
-          <p class="card-desc">スライム娘<br>得意：浄化<br>状態：${slaminStatus}</p></div>
-        </div>` : '<div class="empty-state">まだ通常の魔物娘はいません。</div>'}
+          <p class="card-desc">スライム娘<br>得意：浄化<br>状態：${residentStatus('slamin')}</p></div>
+        </div>` : ''}
+        ${state.flags.lilyJoined ? `<div class="resident-list-card static-card">
+          <img src="images/lily.webp" alt="リリー">
+          <div><div class="card-head"><span class="card-title">リリー</span><span class="badge">自然</span></div>
+          <p class="card-desc">アルラウネ<br>得意：栽培<br>状態：${residentStatus('lily')}</p></div>
+        </div>` : ''}
+        ${!state.flags.slaminJoined && !state.flags.lilyJoined ? '<div class="empty-state">まだ通常の魔物娘はいません。</div>' : ''}
       </div>
     </section>`;
   }
@@ -509,40 +579,33 @@
 
     if (step === 'collectStone') {
       body = `<div class="tutorial-lock tutorial-focus"><strong>まずは井戸を直す石を集めよう</strong><p>最初のチュートリアルでは、ほかの行動はまだ選べません。</p></div>
-        <div class="card-stack">
-          <button class="action-card action-highlight" id="gather-stone">
-            <div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div>
-            <p class="card-desc">周囲の瓦礫から石材を5個集めます。</p>
-          </button>
-        </div>`;
+        <div class="card-stack"><button class="action-card action-highlight" id="gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">周囲の瓦礫から石材を5個集めます。</p></button></div>`;
     } else if (step === 'repairWell') {
       body = `<div class="tutorial-lock"><strong>井戸を修復しよう</strong><p>必要な石材5個が揃いました。修復を終えるまで、時間が進む行動は選べません。</p><button class="primary-btn" id="go-build">建築を開く</button></div>`;
     } else if (step === 'sleepAfterWell') {
-      body = `<div class="tutorial-lock tutorial-focus"><strong>今日はここまで</strong><p>井戸の修復が終わりました。眠って翌朝を迎えましょう。</p></div>
-        <div class="card-stack">
-          <button class="action-card action-highlight" id="sleep-action">
-            <div class="card-head"><span class="card-title">🌙 眠る</span><span class="card-time">翌朝へ</span></div>
-            <p class="card-desc">1日目の夜を終えて、次の日の朝へ進みます。</p>
-          </button>
-        </div>`;
+      body = `<div class="tutorial-lock tutorial-focus"><strong>今日はここまで</strong><p>井戸の修復が終わりました。眠って翌朝を迎えましょう。</p></div><div class="card-stack"><button class="action-card action-highlight" id="sleep-action"><div class="card-head"><span class="card-title">🌙 眠る</span><span class="card-time">翌朝へ</span></div><p class="card-desc">1日目の夜を終えて、次の日の朝へ進みます。</p></button></div>`;
     } else if (step === 'meetSlamin') {
       body = `<div class="tutorial-lock"><strong>井戸に何かいる……？</strong><p>必須イベントが発生しています。井戸の❗を確認するまで、時間が進む行動は選べません。</p><button class="primary-btn" id="go-well-event">井戸へ行く</button></div>`;
     } else if (step === 'assignSlamin') {
       body = `<div class="tutorial-lock"><strong>スラミンを配置しよう</strong><p>井戸に「浄化」を得意とするスラミンを配置して、設備効果を試しましょう。</p><button class="primary-btn" id="go-well-assign">井戸の配置を開く</button></div>`;
+    } else if (step === 'waitLily') {
+      body = `<div class="tutorial-lock tutorial-focus"><strong>きれいになった拠点で少し過ごそう</strong><p>清潔度が10になりました。木材を集めながら1区分だけ時間を進めてみましょう。</p></div><div class="card-stack"><button class="action-card action-highlight" id="gather-wood-lily"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。時間が進むと、新しい変化があるかもしれません。</p></button></div>`;
+    } else if (step === 'meetLily') {
+      body = `<div class="tutorial-lock"><strong>広場に誰か来たようです</strong><p>必須イベントが発生しています。広場の❗を確認しましょう。</p><button class="primary-btn" id="go-lily-event">広場へ行く</button></div>`;
+    } else if (step === 'startCultivation') {
+      body = `<div class="tutorial-lock"><strong>リリーに栽培をお願いしよう</strong><p>シャノンからマタリの実を1個受け取りました。広場のリリーに直接お願いしてみましょう。</p><button class="primary-btn" id="go-lily-cultivation">リリーのところへ</button></div>`;
+    } else if (step === 'waitCultivation') {
+      const night = state.timeIndex === 3;
+      body = `<div class="tutorial-lock tutorial-focus"><strong>栽培が終わるのを待とう</strong><p>リリーが栽培中です。今回は待ち時間のため、「${night ? '眠る' : '休む'}」で時間を進められます。翌朝に完成します。</p></div><div class="card-stack"><button class="action-card action-highlight" id="wait-cultivation"><div class="card-head"><span class="card-title">${night ? '🌙 眠る' : '☕ 休む'}</span><span class="card-time">1区分</span></div><p class="card-desc">何もせず1区分進めます。</p></button></div>`;
+    } else if (step === 'harvestCultivation') {
+      body = `<div class="tutorial-lock"><strong>栽培が終わりました</strong><p>リリーがマタリの実を増やしてくれたようです。広場で受け取りましょう。</p><button class="primary-btn" id="go-lily-harvest">リリーのところへ</button></div>`;
     } else if (step === 'complete') {
-      body = `<div class="tutorial-lock complete-card"><strong>最初の実装範囲はここまで</strong><p>この版ではスラミン加入と設備配置まで確認できます。時間を進める行動は、次の実装範囲を追加するまで停止しています。</p></div>`;
+      body = `<div class="tutorial-lock complete-card"><strong>リリーの栽培まで実装完了</strong><p>マタリの実を5個受け取りました。今回の実装範囲はここまでです。次は食料を条件にポチ加入へつなげられます。</p></div>`;
     } else {
-      body = `<div class="card-stack">
-        <button class="action-card" id="gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。</p></button>
-        <button class="action-card" id="gather-wood"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。</p></button>
-      </div>`;
+      body = `<div class="card-stack"><button class="action-card" id="gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。</p></button><button class="action-card" id="gather-wood"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。</p></button></div>`;
     }
 
-    return `<section class="page">
-      <h2 class="page-title">行動</h2>
-      <p class="page-lead">チュートリアル中は、次に必要な行動だけが解放されます。</p>
-      ${body}
-    </section>`;
+    return `<section class="page"><h2 class="page-title">行動</h2><p class="page-lead">チュートリアル中は、次に必要な行動だけが解放されます。</p>${body}</section>`;
   }
 
   function buildHtml() {
@@ -565,16 +628,12 @@
   }
 
   function itemsHtml() {
+    const matariKnown = state.flags.matariReceived || state.flags.cultivationStarted || state.flags.cultivationHarvested;
     return `<section class="page">
-      <h2 class="page-title">物資</h2>
-      <p class="page-lead">資材とアイテムを確認します。</p>
-      <h3 class="section-title">資材</h3>
-      <div class="action-card" role="group">
-        <div class="item-row"><span>🪵 木材</span><b>${state.resources.wood}</b></div>
-        <div class="item-row"><span>🪨 石材</span><b>${state.resources.stone}</b></div>
-      </div>
+      <h2 class="page-title">物資</h2><p class="page-lead">資材とアイテムを確認します。</p>
+      <h3 class="section-title">資材</h3><div class="action-card" role="group"><div class="item-row"><span>🪵 木材</span><b>${state.resources.wood}</b></div><div class="item-row"><span>🪨 石材</span><b>${state.resources.stone}</b></div></div>
       <h3 class="section-title">アイテム</h3>
-      <div class="empty-state">まだアイテムを持っていません。</div>
+      ${matariKnown ? `<div class="action-card" role="group"><div class="item-row"><span>🍎 マタリの実</span><b>${state.items.matari}</b></div><p class="card-desc">ほんのり甘い赤い実。タグ：<span class="badge">食料</span> <span class="badge">植物</span></p></div>` : '<div class="empty-state">まだアイテムを持っていません。</div>'}
     </section>`;
   }
 
@@ -584,7 +643,8 @@
       <div class="facility-list">
         ${FACILITY_ORDER.map(id => {
           const assigned = (state.assignments[id] || []).length;
-          const event = id === 'well' && state.flags.slaminEventReady && !state.flags.slaminJoined;
+          const event = (id === 'well' && state.flags.slaminEventReady && !state.flags.slaminJoined) ||
+            (id === 'plaza' && ((state.flags.lilyEventReady && !state.flags.lilyJoined) || ['startCultivation', 'harvestCultivation'].includes(state.tutorialStep)));
           return `<button class="facility-list-card" data-jump-facility="${id}">
             <div><strong>${facilityName(id)}</strong>${event ? '<span class="event-mini">!</span>' : ''}<small>${id === 'well' && !state.flags.wellBuilt ? '修復が必要' : `配置 ${assigned} / ${FACILITIES[id].capacity}`}</small></div>
             <span>›</span>
@@ -649,6 +709,15 @@
     </section></div>`;
   }
 
+  function cultivationOverlay() {
+    return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div><h2>リリーに栽培をお願いする</h2>
+      <p>植物系アイテムを預けて増やしてもらいます。プロトタイプではマタリの実だけが対象です。</p>
+      <div class="action-card static-card"><div class="item-row"><span>🍎 マタリの実</span><b>${state.items.matari}個</b></div><p class="card-desc">使用：1個 → 翌朝：5個受け取り</p></div>
+      <div class="sheet-actions"><button class="primary-btn" id="start-cultivation" ${state.items.matari >= 1 ? '' : 'disabled'}>マタリの実を預ける</button><button class="secondary-btn" id="back-lily-detail">戻る</button></div>
+    </section></div>`;
+  }
+
   function overlayHtml() {
     if (!overlay) return '';
     if (overlay.type === 'menu') {
@@ -666,13 +735,25 @@
     if (overlay.type === 'facilityList') return facilityListOverlay();
     if (overlay.type === 'facility') return facilityOverlay(overlay.facilityId);
     if (overlay.type === 'residentSelect') return residentSelectOverlay(overlay.facilityId);
+    if (overlay.type === 'cultivation') return cultivationOverlay();
     if (overlay.type === 'shannon') {
       return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><h2>シャノン</h2><p>${state.flags.wellBuilt ? '「井戸が直ると、ここも少し拠点らしく見えてきたね。」' : '「まずは井戸を直そう。石なら、この辺りの瓦礫から集められそうだよ。」'}</p><div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div></section></div>`;
     }
     if (overlay.type === 'resident') {
       const r = RESIDENTS[overlay.residentId];
       const place = getResidentFacility(r.id);
-      return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><h2>${r.name}</h2><p>${r.species} / ${r.lineage}<br>得意：${r.ability}<br>状態：${place ? facilityName(place) + 'に配置中' : '拠点で待機中'}</p><div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div></section></div>`;
+      const task = r.id === 'lily' ? state.tasks.cultivation : null;
+      let extra = '';
+      if (r.id === 'lily' && state.flags.lilyJoined) {
+        if (task?.ready) {
+          extra = `<button class="primary-btn" id="receive-cultivation">マタリの実を受け取る</button>`;
+        } else if (task) {
+          extra = `<div class="effect-box"><strong>🌱 栽培中</strong><p>マタリの実を育てています。翌朝に完成します。</p></div>`;
+        } else if (state.items.matari > 0) {
+          extra = `<button class="primary-btn" id="open-cultivation">栽培をお願いする</button>`;
+        }
+      }
+      return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><h2>${r.name}</h2><p>${r.species} / ${r.lineage}<br>得意：${r.ability}<br>状態：${task ? (task.ready ? '栽培完了' : '栽培中') : (place ? facilityName(place) + 'に配置中' : '拠点で待機中')}</p>${extra}<div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div></section></div>`;
     }
     return '';
   }
@@ -749,6 +830,29 @@
       renderGame();
     });
 
+    document.getElementById('gather-wood-lily')?.addEventListener('click', () => {
+      if (state.tutorialStep !== 'waitLily') return;
+      state.resources.wood += 5;
+      advanceTime(1);
+      toast('木材 +5。広場に誰か来たようです');
+      state.currentTab = 'base';
+      state.currentFacility = 'plaza';
+      renderGame();
+    });
+
+    document.getElementById('wait-cultivation')?.addEventListener('click', () => {
+      if (state.tutorialStep !== 'waitCultivation') return;
+      advanceTime(1);
+      if (state.tutorialStep === 'harvestCultivation') {
+        toast('翌朝になりました。栽培が終わったようです');
+        state.currentTab = 'base';
+        state.currentFacility = 'plaza';
+      } else {
+        toast(`${currentTimeName()}になりました`);
+      }
+      renderGame();
+    });
+
     document.getElementById('sleep-action')?.addEventListener('click', () => {
       if (state.tutorialStep !== 'sleepAfterWell') return;
       state.day += 1;
@@ -780,6 +884,30 @@
       state.currentTab = 'base';
       state.currentFacility = 'well';
       overlay = { type:'facility', facilityId:'well' };
+      save(true);
+      renderGame();
+    });
+
+    document.getElementById('go-lily-event')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'plaza';
+      overlay = null;
+      save(true);
+      renderGame();
+    });
+
+    document.getElementById('go-lily-cultivation')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'plaza';
+      overlay = { type:'resident', residentId:'lily' };
+      save(true);
+      renderGame();
+    });
+
+    document.getElementById('go-lily-harvest')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'plaza';
+      overlay = { type:'resident', residentId:'lily' };
       save(true);
       renderGame();
     });
@@ -827,6 +955,27 @@
       });
     });
 
+    document.getElementById('lily-event')?.addEventListener('click', () => {
+      playDialogue(LILY_EVENT, () => {
+        state.flags.lilyEventReady = false;
+        state.flags.lilyJoined = true;
+        state.flags.matariReceived = true;
+        state.items.matari += 1;
+        setTutorialStep('startCultivation');
+        recalculateStats();
+        save(true);
+        state.currentTab = 'base';
+        state.currentFacility = 'plaza';
+        renderGame();
+        toast('リリーが仲間に！ マタリの実 ×1を受け取りました');
+      });
+    });
+
+    document.getElementById('lily-guide')?.addEventListener('click', () => {
+      overlay = { type:'resident', residentId:'lily' };
+      renderGame();
+    });
+
     document.getElementById('open-resident-select')?.addEventListener('click', () => {
       overlay = { type:'residentSelect', facilityId: overlay.facilityId };
       renderGame();
@@ -851,6 +1000,10 @@
     document.querySelectorAll('[data-unassign]').forEach(btn => btn.addEventListener('click', () => {
       const residentId = btn.dataset.unassign;
       const facilityId = btn.dataset.from;
+      if (residentId === 'slamin' && state.tutorialStep !== 'complete') {
+        toast('チュートリアル中はスラミンを井戸に配置したまま進めましょう');
+        return;
+      }
       unassignResident(residentId, facilityId);
       overlay = { type:'facility', facilityId };
       renderGame();
@@ -869,6 +1022,48 @@
       save(true);
       renderGame();
     }));
+
+    document.getElementById('open-cultivation')?.addEventListener('click', () => {
+      overlay = { type:'cultivation' };
+      renderGame();
+    });
+
+    document.getElementById('back-lily-detail')?.addEventListener('click', () => {
+      overlay = { type:'resident', residentId:'lily' };
+      renderGame();
+    });
+
+    document.getElementById('start-cultivation')?.addEventListener('click', () => {
+      if (state.items.matari < 1 || state.tasks.cultivation) return;
+      state.items.matari -= 1;
+      state.tasks.cultivation = {
+        residentId: 'lily',
+        itemId: 'matari',
+        finishDay: state.day + 1,
+        ready: false
+      };
+      state.flags.cultivationStarted = true;
+      state.flags.cultivationReady = false;
+      setTutorialStep('waitCultivation');
+      overlay = null;
+      save(true);
+      renderGame();
+      toast('リリーにマタリの実を預けました。翌朝に完成します');
+    });
+
+    document.getElementById('receive-cultivation')?.addEventListener('click', () => {
+      if (!state.tasks.cultivation?.ready) return;
+      state.items.matari += 5;
+      state.tasks.cultivation = null;
+      state.flags.cultivationReady = false;
+      state.flags.cultivationHarvested = true;
+      state.flags.sliceComplete = true;
+      setTutorialStep('complete');
+      overlay = null;
+      save(true);
+      renderGame();
+      toast('マタリの実 ×5を受け取りました！');
+    });
 
     document.getElementById('manual-save')?.addEventListener('click', () => save(false));
     document.getElementById('manual-load')?.addEventListener('click', () => {

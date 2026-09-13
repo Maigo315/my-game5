@@ -189,3 +189,13 @@ button:focus-visible { outline:3px solid rgba(217,180,110,.5); outline-offset:2p
   .scene-bottom-panel p { margin:3px 0 5px; font-size:10px; }
   .scene-detail-btn { min-height:31px; }
 }
+
+/* v0.4: keep scene labels clear of the bottom message panel */
+.scene-character { padding-bottom:0; }
+.scene-character span {
+  bottom:calc(100% + 4px);
+  top:auto;
+  box-shadow:0 4px 12px rgba(0,0,0,.28);
+}
+.dialogue-char.lily { height:min(64vh, 570px); }
+.event-lily-guide { left:43%; top:37%; transform:translateX(-50%); font-size:22px; }
