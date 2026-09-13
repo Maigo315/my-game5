@@ -6,14 +6,51 @@
   const app = document.getElementById('app');
   const toastRoot = document.getElementById('toast-root');
 
+  const FACILITY_ORDER = ['plaza', 'well'];
+  const FACILITIES = {
+    plaza: {
+      id: 'plaza',
+      name: '寂れた広場',
+      capacity: 10,
+      development: 0,
+      tags: ['広場'],
+      description: 'かつて町の中心だったと思われる広場。今は静かだが、人が集まる余地は十分にある。',
+      effectAbility: '盛り上げ',
+      effectText: '「盛り上げ」を持つ住民がいると活気 +20（重複なし）'
+    },
+    well: {
+      id: 'well',
+      name: '井戸',
+      capacity: 1,
+      development: 10,
+      tags: ['水場'],
+      description: '修復された水場。拠点の暮らしを支える重要な設備。',
+      effectAbility: '浄化',
+      effectText: '「浄化」を持つ住民がいると清潔度 +10'
+    }
+  };
+
+  const RESIDENTS = {
+    slamin: {
+      id: 'slamin',
+      name: 'スラミン',
+      species: 'スライム娘',
+      lineage: 'スライム',
+      ability: '浄化',
+      image: 'images/slamin.webp'
+    }
+  };
+
   const defaultState = () => ({
-    version: 1,
+    version: 2,
     started: false,
     currentTab: 'base',
+    currentFacility: 'plaza',
     day: 1,
     timeIndex: 0,
     resources: { wood: 0, stone: 0 },
     stats: { development: 0, cleanliness: 0, liveliness: 0 },
+    assignments: { plaza: [], well: [] },
     flags: {
       prologueDone: false,
       firstStoneGathered: false,
@@ -49,6 +86,7 @@
   ];
 
   function save(auto = true) {
+    recalculateStats();
     state.saveStamp = new Date().toISOString();
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
     if (!auto) toast('手動セーブしました');
@@ -59,10 +97,23 @@
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw);
-      state = { ...defaultState(), ...parsed };
-      state.resources = { ...defaultState().resources, ...(parsed.resources || {}) };
-      state.stats = { ...defaultState().stats, ...(parsed.stats || {}) };
-      state.flags = { ...defaultState().flags, ...(parsed.flags || {}) };
+      const fresh = defaultState();
+      state = { ...fresh, ...parsed };
+      state.resources = { ...fresh.resources, ...(parsed.resources || {}) };
+      state.stats = { ...fresh.stats, ...(parsed.stats || {}) };
+      state.flags = { ...fresh.flags, ...(parsed.flags || {}) };
+      state.assignments = {
+        plaza: Array.isArray(parsed.assignments?.plaza) ? parsed.assignments.plaza : [],
+        well: Array.isArray(parsed.assignments?.well) ? parsed.assignments.well : []
+      };
+      if (!FACILITY_ORDER.includes(state.currentFacility)) state.currentFacility = 'plaza';
+
+      // v0.1 のセーブをそのまま読み込めるように移行。
+      if (parsed.flags?.slaminAssignedToWell && !state.assignments.well.includes('slamin')) {
+        state.assignments.well = ['slamin'];
+      }
+      state.version = 2;
+      recalculateStats();
       return true;
     } catch (err) {
       console.warn('Save load failed', err);
@@ -92,6 +143,64 @@
 
   function currentTimeName() { return TIME_NAMES[state.timeIndex]; }
 
+  function joinedResidentIds() {
+    const ids = [];
+    if (state.flags.slaminJoined) ids.push('slamin');
+    return ids;
+  }
+
+  function getResidentFacility(residentId) {
+    return FACILITY_ORDER.find(id => (state.assignments[id] || []).includes(residentId)) || null;
+  }
+
+  function facilityName(id) {
+    if (id === 'well' && !state.flags.wellBuilt) return '壊れた井戸';
+    return FACILITIES[id]?.name || id;
+  }
+
+  function isFacilityUsable(id) {
+    if (id === 'well') return state.flags.wellBuilt;
+    return true;
+  }
+
+  function hasAbilityAtFacility(facilityId, ability) {
+    return (state.assignments[facilityId] || []).some(residentId => RESIDENTS[residentId]?.ability === ability);
+  }
+
+  function recalculateStats() {
+    state.stats.development = state.flags.wellBuilt ? 10 : 0;
+    state.stats.cleanliness = state.flags.wellBuilt && hasAbilityAtFacility('well', '浄化') ? 10 : 0;
+    state.stats.liveliness = joinedResidentIds().length * 10;
+    if (hasAbilityAtFacility('plaza', '盛り上げ')) state.stats.liveliness += 20;
+
+    state.flags.slaminAssignedToWell = (state.assignments.well || []).includes('slamin');
+    if (state.flags.slaminAssignedToWell) state.flags.sliceComplete = true;
+  }
+
+  function assignResident(residentId, facilityId) {
+    if (!joinedResidentIds().includes(residentId) || !isFacilityUsable(facilityId)) return false;
+    const facility = FACILITIES[facilityId];
+    const current = getResidentFacility(residentId);
+    if (current === facilityId) return true;
+
+    const target = state.assignments[facilityId] || [];
+    if (target.length >= facility.capacity) return false;
+
+    FACILITY_ORDER.forEach(id => {
+      state.assignments[id] = (state.assignments[id] || []).filter(x => x !== residentId);
+    });
+    state.assignments[facilityId].push(residentId);
+    recalculateStats();
+    save(true);
+    return true;
+  }
+
+  function unassignResident(residentId, facilityId) {
+    state.assignments[facilityId] = (state.assignments[facilityId] || []).filter(x => x !== residentId);
+    recalculateStats();
+    save(true);
+  }
+
   function advanceTime(steps = 1) {
     for (let i = 0; i < steps; i++) {
       if (state.timeIndex === 3) {
@@ -118,9 +227,10 @@
     playDialogue(PROLOGUE, () => {
       state.flags.prologueDone = true;
       state.currentTab = 'base';
+      state.currentFacility = 'plaza';
       save(true);
       renderGame();
-      toast('「行動」から石材を集めてみましょう');
+      toast('「行動」から石材を5個集めてみましょう');
     });
   }
 
@@ -158,7 +268,7 @@
         <div>
           <div class="title-kicker">MONSTER GIRL SETTLEMENT</div>
           <h1 class="title-logo">終末</h1>
-          <p class="title-sub">スマートフォン向け プロトタイプ v0.1</p>
+          <p class="title-sub">スマートフォン向け プロトタイプ v0.2</p>
         </div>
         <div class="title-actions">
           <button class="primary-btn" id="new-game">はじめから</button>
@@ -178,6 +288,7 @@
   }
 
   function renderGame() {
+    recalculateStats();
     app.innerHTML = `
       <section class="game-screen">
         ${topBarHtml()}
@@ -214,9 +325,13 @@
     </div>`;
   }
 
+  function tutorialNeedsWellRepair() {
+    return state.flags.firstStoneGathered && !state.flags.wellBuilt;
+  }
+
   function needsTabDot(tab) {
     if (tab === 'actions' && !state.flags.firstStoneGathered) return true;
-    if (tab === 'build' && state.flags.firstStoneGathered && !state.flags.wellBuilt) return true;
+    if (tab === 'build' && tutorialNeedsWellRepair()) return true;
     if (tab === 'base' && state.flags.slaminEventReady && !state.flags.slaminJoined) return true;
     return false;
   }
@@ -242,69 +357,146 @@
     }
   }
 
+  function facilityResidentsForScene(facilityId) {
+    if (facilityId === 'plaza') {
+      const explicitlyPlaced = state.assignments.plaza || [];
+      const idle = joinedResidentIds().filter(id => !getResidentFacility(id));
+      return [...new Set([...explicitlyPlaced, ...idle])];
+    }
+    return state.assignments[facilityId] || [];
+  }
+
+  function sceneCharacterHtml(residentId, index, count, facilityId) {
+    const resident = RESIDENTS[residentId];
+    if (!resident) return '';
+    const pos = characterPosition(facilityId, index, count);
+    return `<button class="scene-character" data-resident="${residentId}" style="--char-left:${pos.left}%;--char-bottom:${pos.bottom}px;--char-width:${pos.width}px">
+      <img src="${resident.image}" alt="${resident.name}">
+      <span>${resident.name}</span>
+    </button>`;
+  }
+
+  function characterPosition(facilityId, index, count) {
+    const plazaPositions = [
+      { left: 31, bottom: 76, width: 104 }, { left: 50, bottom: 68, width: 96 },
+      { left: 72, bottom: 76, width: 100 }, { left: 20, bottom: 170, width: 86 },
+      { left: 42, bottom: 178, width: 84 }, { left: 65, bottom: 174, width: 86 },
+      { left: 82, bottom: 168, width: 80 }, { left: 29, bottom: 264, width: 72 },
+      { left: 55, bottom: 258, width: 74 }, { left: 76, bottom: 264, width: 72 }
+    ];
+    const wellPositions = [
+      { left: 72, bottom: 78, width: 112 }, { left: 25, bottom: 82, width: 104 }
+    ];
+    const list = facilityId === 'well' ? wellPositions : plazaPositions;
+    return list[index % list.length];
+  }
+
+  function facilitySceneNote(facilityId) {
+    if (facilityId === 'plaza') {
+      if (!state.flags.firstStoneGathered) return 'シャノンと拠点づくりを始めます。「行動」から石材を集めましょう。';
+      if (tutorialNeedsWellRepair()) return '井戸を直す石材が揃いました。「建築」から修復を進めましょう。';
+      if (state.flags.slaminJoined && !getResidentFacility('slamin')) return 'スラミンは今、広場でのんびりしています。設備に配置することもできます。';
+      return '拠点の中心になる広場。シャノンはここで様子を見ています。';
+    }
+    if (!state.flags.wellBuilt) return '壊れた井戸。石材5個があれば修復できます。';
+    if (state.flags.slaminEventReady && !state.flags.slaminJoined) return '井戸のそばに、見慣れない気配があります……。';
+    if (state.flags.slaminAssignedToWell) return 'スラミンが井戸を浄化中。清潔度 +10。';
+    if (state.flags.slaminJoined) return '「設備情報」から住民を配置できます。';
+    return '井戸が直りました。夜を越えれば、何か変化があるかもしれません。';
+  }
+
   function baseHtml() {
-    const wellClass = state.flags.wellBuilt ? '' : 'broken';
-    const wellName = state.flags.wellBuilt ? '井戸' : '壊れた井戸';
-    const eventPin = state.flags.slaminEventReady && !state.flags.slaminJoined
-      ? `<button class="event-pin event-well" id="slamin-event" aria-label="イベント">!</button>` : '';
-    const slamin = state.flags.slaminJoined
-      ? `<button class="object-btn slamin-object" id="slamin-object"><img src="images/slamin.webp" alt="スラミン"><span class="object-name">スラミン</span></button>` : '';
-    const assignmentNote = state.flags.slaminAssignedToWell
-      ? 'スラミンが井戸を浄化中。清潔度が上がっています。'
-      : state.flags.slaminJoined
-        ? '井戸をタップすると、スラミンを配置できます。'
-        : state.flags.wellBuilt
-          ? '井戸が直りました。今夜は休んで、明日の様子を見ましょう。'
-          : 'まずは石材を集めて、壊れた井戸を修復しましょう。';
+    const id = state.currentFacility;
+    const facility = FACILITIES[id];
+    const idx = FACILITY_ORDER.indexOf(id);
+    const isWell = id === 'well';
+    const residents = facilityResidentsForScene(id);
+    const slaminEvent = isWell && state.flags.slaminEventReady && !state.flags.slaminJoined;
+
+    const mainObject = isWell
+      ? `<button class="facility-object well-focus ${state.flags.wellBuilt ? '' : 'broken'}" id="facility-object" aria-label="${facilityName('well')}">
+          <img src="images/well.webp" alt="${facilityName('well')}">
+        </button>`
+      : '';
+
+    const characters = residents.map((residentId, i) => sceneCharacterHtml(residentId, i, residents.length, id)).join('');
+    const shannon = id === 'plaza'
+      ? `<button class="scene-character shannon-scene" id="shannon-object" style="--char-left:76%;--char-bottom:76px;--char-width:120px">
+          <img src="images/shannon.webp" alt="シャノン"><span>シャノン</span>
+        </button>` : '';
+
     return `
-      ${state.flags.sliceComplete ? '<div class="prototype-banner">最初の実装範囲はここまでです。スラミン加入と設備配置まで試せます。次はリリー来訪・栽培へ拡張できます。</div>' : ''}
-      <div class="base-scene">
-        <div class="location-label">寂れた広場</div>
-        <button class="object-btn well-object ${wellClass}" id="well-object"><img src="images/well.webp" alt="${wellName}"><span class="object-name">${wellName}</span></button>
-        <button class="object-btn shannon-object" id="shannon-object"><img src="images/shannon.webp" alt="シャノン"><span class="object-name">シャノン</span></button>
-        ${slamin}
-        ${eventPin}
-        <div class="scene-note">${assignmentNote}</div>
+      ${state.flags.sliceComplete ? '<div class="prototype-banner">最初の実装範囲はここまでです。設備ページ切替と汎用配置も試せます。</div>' : ''}
+      <div class="facility-scene time-${state.timeIndex}" id="facility-scene" data-facility="${id}">
+        <div class="facility-scene-head">
+          <div>
+            <div class="facility-counter">${idx + 1} / ${FACILITY_ORDER.length}</div>
+            <strong>${facilityName(id)}</strong>
+          </div>
+          <button class="scene-list-btn" id="facility-list-btn">設備一覧</button>
+        </div>
+
+        <button class="scene-arrow scene-arrow-left" id="facility-prev" ${idx === 0 ? 'disabled' : ''} aria-label="前の設備">‹</button>
+        <button class="scene-arrow scene-arrow-right" id="facility-next" ${idx === FACILITY_ORDER.length - 1 ? 'disabled' : ''} aria-label="次の設備">›</button>
+
+        ${mainObject}
+        ${shannon}
+        ${characters}
+        ${slaminEvent ? '<button class="event-pin event-center" id="slamin-event" aria-label="イベント">!</button>' : ''}
+
+        <div class="scene-bottom-panel">
+          <div class="facility-dots">${FACILITY_ORDER.map((fid, i) => `<i class="${i === idx ? 'active' : ''}"></i>`).join('')}</div>
+          <p>${facilitySceneNote(id)}</p>
+          <button class="scene-detail-btn" id="facility-detail-btn">設備情報・配置</button>
+        </div>
       </div>`;
   }
 
   function friendsHtml() {
+    const slaminStatus = state.flags.slaminJoined
+      ? (getResidentFacility('slamin') ? `${facilityName(getResidentFacility('slamin'))}に配置中` : '拠点で待機中')
+      : '';
     return `<section class="page">
       <h2 class="page-title">仲間</h2>
       <p class="page-lead">拠点にいる魔物娘と、現在の役割を確認できます。</p>
       <div class="card-stack">
-        <div class="action-card" role="group">
-          <div class="card-head"><span class="card-title">シャノン</span><span class="badge">ストーリー</span></div>
-          <p class="card-desc">羊娘 / 獣　得意：相談<br>通常住民とは別枠。井戸修復を手伝ってくれます。</p>
+        <div class="resident-list-card static-card">
+          <img src="images/shannon.webp" alt="シャノン">
+          <div><div class="card-head"><span class="card-title">シャノン</span><span class="badge">ストーリー</span></div>
+          <p class="card-desc">羊娘 / 獣<br>得意：相談<br>状態：寂れた広場</p></div>
         </div>
-        ${state.flags.slaminJoined ? `<div class="action-card" role="group">
-          <div class="card-head"><span class="card-title">スラミン</span><span class="badge">スライム</span></div>
-          <p class="card-desc">スライム娘　得意：浄化<br>状態：${state.flags.slaminAssignedToWell ? '井戸に配置中' : '拠点にいる'}</p>
+        ${state.flags.slaminJoined ? `<div class="resident-list-card static-card">
+          <img src="images/slamin.webp" alt="スラミン">
+          <div><div class="card-head"><span class="card-title">スラミン</span><span class="badge">スライム</span></div>
+          <p class="card-desc">スライム娘<br>得意：浄化<br>状態：${slaminStatus}</p></div>
         </div>` : '<div class="empty-state">まだ通常の魔物娘はいません。</div>'}
       </div>
     </section>`;
   }
 
   function actionsHtml() {
-    const canGather = !state.flags.wellBuildStarted;
+    const tutorialLock = tutorialNeedsWellRepair();
+    const canAct = !state.flags.wellBuildStarted && !tutorialLock;
     const night = state.timeIndex === 3;
+    const canGatherStone = canAct && (!state.flags.firstStoneGathered || state.flags.wellBuilt);
     return `<section class="page">
       <h2 class="page-title">行動</h2>
       <p class="page-lead">主人公が行動すると、ゲーム内時間が1区分進みます。</p>
+      ${tutorialLock ? `<div class="tutorial-lock"><strong>井戸修復を進めよう</strong><p>必要な石材5個が揃いました。チュートリアル中のため、井戸を修復するまで時間が進む行動は選べません。</p><button class="primary-btn" id="go-build">建築を開く</button></div>` : ''}
       <div class="card-stack">
-        <button class="action-card" id="gather-stone" ${canGather ? '' : 'disabled'}>
+        <button class="action-card" id="gather-stone" ${canGatherStone ? '' : 'disabled'}>
           <div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div>
-          <p class="card-desc">周囲の瓦礫から使えそうな石材を集めます。${!state.flags.firstStoneGathered ? ' 初回は石材+5。' : ' 石材+5。'}</p>
+          <p class="card-desc">周囲の瓦礫から使えそうな石材を集めます。${!state.flags.firstStoneGathered ? '初回は石材+5。' : '石材+5。'}</p>
         </button>
-        <button class="action-card" id="gather-wood" ${state.flags.wellBuilt ? '' : 'disabled'}>
+        <button class="action-card" id="gather-wood" ${state.flags.wellBuilt && canAct ? '' : 'disabled'}>
           <div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div>
           <p class="card-desc">周辺から使えそうな木材を集めます。井戸修復後に利用できます。</p>
         </button>
-        <button class="action-card" id="rest-action" ${canGather ? '' : 'disabled'}>
+        <button class="action-card" id="rest-action" ${canAct ? '' : 'disabled'}>
           <div class="card-head"><span class="card-title">☕ 休む</span><span class="card-time">1区分</span></div>
           <p class="card-desc">何もせず時間を進めます。</p>
         </button>
-        ${night ? `<button class="action-card" id="sleep-action">
+        ${night ? `<button class="action-card" id="sleep-action" ${canAct ? '' : 'disabled'}>
           <div class="card-head"><span class="card-title">🌙 眠る</span><span class="card-time">翌朝へ</span></div>
           <p class="card-desc">夜を終えて、次の日の朝へ進みます。</p>
         </button>` : ''}
@@ -316,7 +508,7 @@
     const enoughStone = state.resources.stone >= 5;
     if (state.flags.wellBuilt) {
       return `<section class="page"><h2 class="page-title">建築</h2><p class="page-lead">設備の建築・修復を行います。</p>
-        <div class="action-card"><div class="card-head"><span class="card-title">井戸</span><span class="badge">完成</span></div><p class="card-desc">発展度 +10 / 配置上限 1人 / タグ：水場</p></div>
+        <button class="action-card" id="jump-well"><div class="card-head"><span class="card-title">井戸</span><span class="badge">完成</span></div><p class="card-desc">発展度 +10 / 配置上限 1人 / タグ：水場<br>タップして井戸の画面へ移動。</p></button>
         <div class="empty-state" style="margin-top:10px">この実装範囲では、ほかの設備はまだ建てられません。</div></section>`;
     }
     return `<section class="page">
@@ -327,7 +519,7 @@
         <p class="card-desc">石材 5（所持 ${state.resources.stone}）<br>必要人員：魔物娘×1 → 今回はシャノンが協力<br>完成時：発展度 +10</p>
         <div class="progress"><i style="width:${enoughStone ? 100 : Math.min(100, state.resources.stone / 5 * 100)}%"></i></div>
       </button>
-      ${!enoughStone ? '<p class="page-lead" style="margin-top:10px">石材が足りません。「行動」から石材を集めましょう。</p>' : ''}
+      ${!enoughStone ? '<p class="page-lead" style="margin-top:10px">石材が足りません。「行動」から石材を集めましょう。</p>' : '<p class="ready-note">✓ 資材が揃っています。修復を開始できます。</p>'}
     </section>`;
   }
 
@@ -345,6 +537,76 @@
     </section>`;
   }
 
+  function facilityListOverlay() {
+    return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet tall-sheet" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div><h2>設備一覧</h2><p>行きたい場所を選んでください。普段は拠点画面を左右にスワイプしても移動できます。</p>
+      <div class="facility-list">
+        ${FACILITY_ORDER.map(id => {
+          const assigned = (state.assignments[id] || []).length;
+          const event = id === 'well' && state.flags.slaminEventReady && !state.flags.slaminJoined;
+          return `<button class="facility-list-card" data-jump-facility="${id}">
+            <div><strong>${facilityName(id)}</strong>${event ? '<span class="event-mini">!</span>' : ''}<small>${id === 'well' && !state.flags.wellBuilt ? '修復が必要' : `配置 ${assigned} / ${FACILITIES[id].capacity}`}</small></div>
+            <span>›</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div>
+    </section></div>`;
+  }
+
+  function facilityOverlay(facilityId) {
+    const facility = FACILITIES[facilityId];
+    const usable = isFacilityUsable(facilityId);
+    const placed = state.assignments[facilityId] || [];
+    const isBrokenWell = facilityId === 'well' && !state.flags.wellBuilt;
+    return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet tall-sheet" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div>
+      <h2>${facilityName(facilityId)}</h2>
+      <p>${isBrokenWell ? '長いあいだ放置されていた井戸。石材5個で修復できます。' : facility.description}</p>
+      <div class="facility-meta">
+        <span class="badge">配置 ${usable ? placed.length : 0} / ${facility.capacity}</span>
+        ${facility.tags.map(tag => `<span class="badge">${tag}</span>`).join('')}
+        <span class="badge">発展度 +${isBrokenWell ? 0 : facility.development}</span>
+      </div>
+      ${!isBrokenWell ? `<div class="effect-box"><strong>設備効果</strong><p>${facility.effectText}</p></div>` : ''}
+      ${placed.length ? `<h3 class="sheet-subtitle">配置中</h3><div class="placed-list">${placed.map(id => {
+        const r = RESIDENTS[id];
+        return `<div class="placed-row"><img src="${r.image}" alt="${r.name}"><div><strong>${r.name}</strong><small>得意：${r.ability}</small></div><button class="mini-btn" data-unassign="${id}" data-from="${facilityId}">外す</button></div>`;
+      }).join('')}</div>` : (!isBrokenWell ? '<p class="muted-text">配置中の住民はいません。</p>' : '')}
+      <div class="sheet-actions">
+        ${usable ? `<button class="primary-btn" id="open-resident-select">${placed.length >= facility.capacity ? '住民を入れ替える' : '住民を配置する'}</button>` : ''}
+        <button class="secondary-btn" id="close-sheet">閉じる</button>
+      </div>
+    </section></div>`;
+  }
+
+  function residentSelectOverlay(facilityId) {
+    const facility = FACILITIES[facilityId];
+    const residents = joinedResidentIds();
+    return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet tall-sheet" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div><h2>住民を配置する</h2>
+      <p>${facilityName(facilityId)}：配置 ${(state.assignments[facilityId] || []).length} / ${facility.capacity}</p>
+      <div class="resident-select-list">
+        ${residents.length ? residents.map(id => {
+          const r = RESIDENTS[id];
+          const current = getResidentFacility(id);
+          const effective = r.ability === facility.effectAbility;
+          const here = current === facilityId;
+          return `<button class="resident-select-card ${here ? 'selected' : ''}" data-select-resident="${id}" ${here ? 'disabled' : ''}>
+            <img src="${r.image}" alt="${r.name}">
+            <div class="resident-card-body">
+              <div class="resident-card-title"><strong>${r.name}</strong><span class="badge">${r.species}</span></div>
+              <p>得意：${r.ability}</p>
+              <small>${here ? `現在：${facilityName(facilityId)}に配置中` : current ? `現在：${facilityName(current)}に配置中` : '現在：待機中'}</small>
+              <em class="${effective ? 'effect-good' : 'effect-none'}">${effective ? '✓ この設備で特殊効果あり' : 'この設備では特殊効果なし'}</em>
+            </div>
+          </button>`;
+        }).join('') : '<div class="empty-state">配置できる通常住民がまだいません。</div>'}
+      </div>
+      <div class="sheet-actions"><button class="secondary-btn" id="back-facility-detail">戻る</button></div>
+    </section></div>`;
+  }
+
   function overlayHtml() {
     if (!overlay) return '';
     if (overlay.type === 'menu') {
@@ -359,22 +621,52 @@
         </div>
       </section></div>`;
     }
-    if (overlay.type === 'well') {
-      const joined = state.flags.slaminJoined;
-      return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true">
-        <div class="sheet-handle"></div><h2>${state.flags.wellBuilt ? '井戸' : '壊れた井戸'}</h2>
-        <p>${state.flags.wellBuilt ? '修復された水場。発展度 +10。配置上限 1人。' : '長いあいだ放置されていた井戸。石材5で修復できます。'}</p>
-        ${state.flags.wellBuilt ? `<p><span class="badge">タグ：水場</span></p>` : ''}
-        ${joined ? `<div class="sheet-actions"><button class="primary-btn" id="assign-slamin" ${state.flags.slaminAssignedToWell ? 'disabled' : ''}>${state.flags.slaminAssignedToWell ? 'スラミン配置中' : 'スラミンを配置する'}</button><button class="secondary-btn" id="close-sheet">閉じる</button></div>` : '<div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div>'}
-      </section></div>`;
-    }
+    if (overlay.type === 'facilityList') return facilityListOverlay();
+    if (overlay.type === 'facility') return facilityOverlay(overlay.facilityId);
+    if (overlay.type === 'residentSelect') return residentSelectOverlay(overlay.facilityId);
     if (overlay.type === 'shannon') {
       return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><h2>シャノン</h2><p>${state.flags.wellBuilt ? '「井戸が直ると、ここも少し拠点らしく見えてきたね。」' : '「まずは井戸を直そう。石なら、この辺りの瓦礫から集められそうだよ。」'}</p><div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div></section></div>`;
     }
-    if (overlay.type === 'slamin') {
-      return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><h2>スラミン</h2><p>スライム娘 / 得意：浄化<br>${state.flags.slaminAssignedToWell ? '「井戸、ぴかぴかにしておくね！」' : '「井戸のお掃除なら、わたしに任せて！」'}</p><div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div></section></div>`;
+    if (overlay.type === 'resident') {
+      const r = RESIDENTS[overlay.residentId];
+      const place = getResidentFacility(r.id);
+      return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><h2>${r.name}</h2><p>${r.species} / ${r.lineage}<br>得意：${r.ability}<br>状態：${place ? facilityName(place) + 'に配置中' : '拠点で待機中'}</p><div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div></section></div>`;
     }
     return '';
+  }
+
+  function switchFacility(delta) {
+    const idx = FACILITY_ORDER.indexOf(state.currentFacility);
+    const next = idx + delta;
+    if (next < 0 || next >= FACILITY_ORDER.length) return;
+    state.currentFacility = FACILITY_ORDER[next];
+    overlay = null;
+    save(true);
+    renderGame();
+  }
+
+  function bindSwipe() {
+    const scene = document.getElementById('facility-scene');
+    if (!scene) return;
+    let startX = null;
+    let startY = null;
+    scene.addEventListener('touchstart', e => {
+      if (e.target.closest('button')) return;
+      const t = e.changedTouches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+    }, { passive: true });
+    scene.addEventListener('touchend', e => {
+      if (startX === null) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      startX = null;
+      startY = null;
+      if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
+      if (dx < 0) switchFacility(1);
+      else switchFacility(-1);
+    }, { passive: true });
   }
 
   function bindGameEvents() {
@@ -386,19 +678,26 @@
     }));
 
     document.getElementById('menu-btn')?.addEventListener('click', () => { overlay = { type:'menu' }; renderGame(); });
-    document.getElementById('well-object')?.addEventListener('click', () => { overlay = { type:'well' }; renderGame(); });
+    document.getElementById('facility-list-btn')?.addEventListener('click', () => { overlay = { type:'facilityList' }; renderGame(); });
+    document.getElementById('facility-detail-btn')?.addEventListener('click', () => { overlay = { type:'facility', facilityId: state.currentFacility }; renderGame(); });
+    document.getElementById('facility-object')?.addEventListener('click', () => { overlay = { type:'facility', facilityId: state.currentFacility }; renderGame(); });
+    document.getElementById('facility-prev')?.addEventListener('click', () => switchFacility(-1));
+    document.getElementById('facility-next')?.addEventListener('click', () => switchFacility(1));
     document.getElementById('shannon-object')?.addEventListener('click', () => { overlay = { type:'shannon' }; renderGame(); });
-    document.getElementById('slamin-object')?.addEventListener('click', () => { overlay = { type:'slamin' }; renderGame(); });
+    document.querySelectorAll('[data-resident]').forEach(btn => btn.addEventListener('click', () => { overlay = { type:'resident', residentId: btn.dataset.resident }; renderGame(); }));
+    bindSwipe();
 
     document.getElementById('gather-stone')?.addEventListener('click', () => {
+      if (tutorialNeedsWellRepair()) return;
       state.resources.stone += 5;
       state.flags.firstStoneGathered = true;
       advanceTime(1);
-      toast('石材 +5');
+      toast('石材 +5。井戸を修復できるようになりました');
       renderGame();
     });
 
     document.getElementById('gather-wood')?.addEventListener('click', () => {
+      if (tutorialNeedsWellRepair()) return;
       state.resources.wood += 5;
       advanceTime(1);
       toast('木材 +5');
@@ -406,18 +705,27 @@
     });
 
     document.getElementById('rest-action')?.addEventListener('click', () => {
+      if (tutorialNeedsWellRepair()) return;
       advanceTime(1);
       toast('少し休みました');
       renderGame();
     });
 
     document.getElementById('sleep-action')?.addEventListener('click', () => {
+      if (tutorialNeedsWellRepair()) return;
       state.day += 1;
       state.timeIndex = 0;
       runTimeTriggers();
       save(true);
       toast(`${state.day}日目の朝になりました`);
       state.currentTab = 'base';
+      renderGame();
+    });
+
+    document.getElementById('go-build')?.addEventListener('click', () => {
+      state.currentTab = 'build';
+      overlay = null;
+      save(true);
       renderGame();
     });
 
@@ -434,36 +742,76 @@
         advanceTime(2);
         state.flags.wellBuildStarted = false;
         state.flags.wellBuilt = true;
-        state.stats.development += 10;
         state.currentTab = 'base';
+        state.currentFacility = 'well';
         save(true);
         renderGame();
         toast('井戸を修復！ 発展度 +10');
       });
     });
 
+    document.getElementById('jump-well')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'well';
+      save(true);
+      renderGame();
+    });
+
     document.getElementById('slamin-event')?.addEventListener('click', () => {
       playDialogue(SLAMIN_EVENT, () => {
         state.flags.slaminEventReady = false;
         state.flags.slaminJoined = true;
-        state.stats.liveliness += 10;
+        recalculateStats();
         save(true);
         state.currentTab = 'base';
+        state.currentFacility = 'well';
         renderGame();
         toast('スラミンが仲間になりました！ 活気 +10');
       });
     });
 
-    document.getElementById('assign-slamin')?.addEventListener('click', () => {
-      if (!state.flags.slaminJoined || state.flags.slaminAssignedToWell) return;
-      state.flags.slaminAssignedToWell = true;
-      state.stats.cleanliness += 10;
-      state.flags.sliceComplete = true;
+    document.getElementById('open-resident-select')?.addEventListener('click', () => {
+      overlay = { type:'residentSelect', facilityId: overlay.facilityId };
+      renderGame();
+    });
+
+    document.querySelectorAll('[data-select-resident]').forEach(btn => btn.addEventListener('click', () => {
+      const residentId = btn.dataset.selectResident;
+      const facilityId = overlay.facilityId;
+      const currentPlaced = state.assignments[facilityId] || [];
+      if (currentPlaced.length >= FACILITIES[facilityId].capacity && getResidentFacility(residentId) !== facilityId) {
+        toast('この設備の配置上限に達しています。先に住民を外してください');
+        return;
+      }
+      if (assignResident(residentId, facilityId)) {
+        const r = RESIDENTS[residentId];
+        overlay = { type:'facility', facilityId };
+        renderGame();
+        toast(`${r.name}を${facilityName(facilityId)}に配置しました`);
+      }
+    }));
+
+    document.querySelectorAll('[data-unassign]').forEach(btn => btn.addEventListener('click', () => {
+      const residentId = btn.dataset.unassign;
+      const facilityId = btn.dataset.from;
+      unassignResident(residentId, facilityId);
+      overlay = { type:'facility', facilityId };
+      renderGame();
+      toast(`${RESIDENTS[residentId].name}の配置を外しました`);
+    }));
+
+    document.getElementById('back-facility-detail')?.addEventListener('click', () => {
+      overlay = { type:'facility', facilityId: overlay.facilityId };
+      renderGame();
+    });
+
+    document.querySelectorAll('[data-jump-facility]').forEach(btn => btn.addEventListener('click', () => {
+      state.currentFacility = btn.dataset.jumpFacility;
+      state.currentTab = 'base';
       overlay = null;
       save(true);
       renderGame();
-      toast('スラミンを井戸に配置。清潔度 +10');
-    });
+    }));
 
     document.getElementById('manual-save')?.addEventListener('click', () => save(false));
     document.getElementById('manual-load')?.addEventListener('click', () => {
