@@ -49,8 +49,16 @@
     }
   };
 
+  // 拠点画面での見た目補正。画像素材ごとの差をここだけで吸収する。
+  // scale はキャラクターの見た目サイズ、offsetX / offsetY は足元基準の微調整。
+  const SCENE_CHARACTER_STYLE = {
+    shannon: { scale: 1.00, offsetX: 0, offsetY: 0 },
+    slamin:  { scale: 1.08, offsetX: 0, offsetY: 0 },
+    lily:    { scale: 1.24, offsetX: 0, offsetY: 2 }
+  };
+
   const defaultState = () => ({
-    version: 4,
+    version: 5,
     started: false,
     tutorialStep: 'collectStone',
     currentTab: 'base',
@@ -141,7 +149,7 @@
       if (parsed.flags?.slaminAssignedToWell && !state.assignments.well.includes('slamin')) {
         state.assignments.well = ['slamin'];
       }
-      state.version = 4;
+      state.version = 5;
       recalculateStats();
       if (!parsed.tutorialStep) state.tutorialStep = deriveTutorialStep();
       if ((parsed.version || 0) < 4 && state.flags.slaminAssignedToWell && !state.flags.lilyJoined) {
@@ -445,22 +453,24 @@
     const resident = RESIDENTS[residentId];
     if (!resident) return '';
     const pos = characterPosition(facilityId, index, count);
-    return `<button class="scene-character" data-resident="${residentId}" style="--char-left:${pos.left}%;--char-bottom:${pos.bottom}px;--char-width:${pos.width}px">
+    const style = SCENE_CHARACTER_STYLE[residentId] || { scale: 1, offsetX: 0, offsetY: 0 };
+    return `<button class="scene-character" data-resident="${residentId}" aria-label="${resident.name}" style="--char-left:${pos.left}%;--char-bottom:${pos.bottom}px;--char-width:${pos.width}px;--char-scale:${style.scale};--char-offset-x:${style.offsetX}px;--char-offset-y:${style.offsetY}px">
       <img src="${resident.image}" alt="${resident.name}">
-      <span>${resident.name}</span>
     </button>`;
   }
 
   function characterPosition(facilityId, index, count) {
+    // bottom は下部メッセージパネルの「安全線」より上に置く。
+    // 人数が増えても前列・中列・後列の順に並べられる。
     const plazaPositions = [
-      { left: 31, bottom: 76, width: 104 }, { left: 50, bottom: 68, width: 96 },
-      { left: 72, bottom: 76, width: 100 }, { left: 20, bottom: 170, width: 86 },
-      { left: 42, bottom: 178, width: 84 }, { left: 65, bottom: 174, width: 86 },
-      { left: 82, bottom: 168, width: 80 }, { left: 29, bottom: 264, width: 72 },
-      { left: 55, bottom: 258, width: 74 }, { left: 76, bottom: 264, width: 72 }
+      { left: 31, bottom: 146, width: 104 }, { left: 50, bottom: 140, width: 96 },
+      { left: 72, bottom: 146, width: 100 }, { left: 20, bottom: 226, width: 86 },
+      { left: 42, bottom: 234, width: 84 }, { left: 65, bottom: 230, width: 86 },
+      { left: 82, bottom: 224, width: 80 }, { left: 29, bottom: 310, width: 72 },
+      { left: 55, bottom: 304, width: 74 }, { left: 76, bottom: 310, width: 72 }
     ];
     const wellPositions = [
-      { left: 72, bottom: 78, width: 112 }, { left: 25, bottom: 82, width: 104 }
+      { left: 72, bottom: 146, width: 112 }, { left: 25, bottom: 150, width: 104 }
     ];
     const list = facilityId === 'well' ? wellPositions : plazaPositions;
     return list[index % list.length];
@@ -499,7 +509,6 @@
     const residents = facilityResidentsForScene(id);
     const slaminEvent = isWell && state.flags.slaminEventReady && !state.flags.slaminJoined;
     const lilyEvent = id === 'plaza' && state.flags.lilyEventReady && !state.flags.lilyJoined;
-    const lilyGuide = id === 'plaza' && state.flags.lilyJoined && ['startCultivation', 'harvestCultivation'].includes(state.tutorialStep);
 
     const mainObject = isWell
       ? `<button class="facility-object well-focus ${state.flags.wellBuilt ? '' : 'broken'}" id="facility-object" aria-label="${facilityName('well')}">
@@ -508,9 +517,10 @@
       : '';
 
     const characters = residents.map((residentId, i) => sceneCharacterHtml(residentId, i, residents.length, id)).join('');
+    const shannonStyle = SCENE_CHARACTER_STYLE.shannon;
     const shannon = id === 'plaza'
-      ? `<button class="scene-character shannon-scene" id="shannon-object" style="--char-left:76%;--char-bottom:78px;--char-width:132px">
-          <img src="images/shannon.webp" alt="シャノン"><span>シャノン</span>
+      ? `<button class="scene-character shannon-scene" id="shannon-object" aria-label="シャノン" style="--char-left:76%;--char-bottom:146px;--char-width:132px;--char-scale:${shannonStyle.scale};--char-offset-x:${shannonStyle.offsetX}px;--char-offset-y:${shannonStyle.offsetY}px">
+          <img src="images/shannon.webp" alt="シャノン">
         </button>` : '';
 
     return `
@@ -531,7 +541,6 @@
         ${characters}
         ${slaminEvent ? '<button class="event-pin event-center" id="slamin-event" aria-label="イベント">!</button>' : ''}
         ${lilyEvent ? '<button class="event-pin event-center" id="lily-event" aria-label="リリー来訪イベント">!</button>' : ''}
-        ${lilyGuide ? `<button class="event-pin event-lily-guide" id="lily-guide" aria-label="リリーに話しかける">${state.tutorialStep === 'harvestCultivation' ? '🌱' : '!'}</button>` : ''}
 
         <div class="scene-bottom-panel">
           <div class="facility-dots">${FACILITY_ORDER.map((fid, i) => `<i class="${i === idx ? 'active' : ''}"></i>`).join('')}</div>
@@ -969,11 +978,6 @@
         renderGame();
         toast('リリーが仲間に！ マタリの実 ×1を受け取りました');
       });
-    });
-
-    document.getElementById('lily-guide')?.addEventListener('click', () => {
-      overlay = { type:'resident', residentId:'lily' };
-      renderGame();
     });
 
     document.getElementById('open-resident-select')?.addEventListener('click', () => {
