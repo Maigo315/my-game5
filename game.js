@@ -42,8 +42,9 @@
   };
 
   const defaultState = () => ({
-    version: 2,
+    version: 3,
     started: false,
+    tutorialStep: 'collectStone',
     currentTab: 'base',
     currentFacility: 'plaza',
     day: 1,
@@ -112,8 +113,9 @@
       if (parsed.flags?.slaminAssignedToWell && !state.assignments.well.includes('slamin')) {
         state.assignments.well = ['slamin'];
       }
-      state.version = 2;
+      state.version = 3;
       recalculateStats();
+      if (!parsed.tutorialStep) state.tutorialStep = deriveTutorialStep();
       return true;
     } catch (err) {
       console.warn('Save load failed', err);
@@ -142,6 +144,19 @@
   }
 
   function currentTimeName() { return TIME_NAMES[state.timeIndex]; }
+
+  function deriveTutorialStep() {
+    if (state.flags.slaminAssignedToWell || state.flags.sliceComplete) return 'complete';
+    if (state.flags.slaminJoined) return 'assignSlamin';
+    if (state.flags.slaminEventReady) return 'meetSlamin';
+    if (state.flags.wellBuilt) return 'sleepAfterWell';
+    if (state.flags.firstStoneGathered) return 'repairWell';
+    return 'collectStone';
+  }
+
+  function setTutorialStep(step) {
+    state.tutorialStep = step;
+  }
 
   function joinedResidentIds() {
     const ids = [];
@@ -174,7 +189,10 @@
     if (hasAbilityAtFacility('plaza', '盛り上げ')) state.stats.liveliness += 20;
 
     state.flags.slaminAssignedToWell = (state.assignments.well || []).includes('slamin');
-    if (state.flags.slaminAssignedToWell) state.flags.sliceComplete = true;
+    if (state.flags.slaminAssignedToWell) {
+      state.flags.sliceComplete = true;
+      if (state.tutorialStep === 'assignSlamin') state.tutorialStep = 'complete';
+    }
   }
 
   function assignResident(residentId, facilityId) {
@@ -217,12 +235,14 @@
   function runTimeTriggers() {
     if (state.flags.wellBuilt && !state.flags.slaminJoined && state.day >= 2 && state.timeIndex === 0) {
       state.flags.slaminEventReady = true;
+      setTutorialStep('meetSlamin');
     }
   }
 
   function startNewGame() {
     state = defaultState();
     state.started = true;
+    state.tutorialStep = 'collectStone';
     save(true);
     playDialogue(PROLOGUE, () => {
       state.flags.prologueDone = true;
@@ -268,7 +288,7 @@
         <div>
           <div class="title-kicker">MONSTER GIRL SETTLEMENT</div>
           <h1 class="title-logo">終末</h1>
-          <p class="title-sub">スマートフォン向け プロトタイプ v0.2</p>
+          <p class="title-sub">スマートフォン向け プロトタイプ v0.3</p>
         </div>
         <div class="title-actions">
           <button class="primary-btn" id="new-game">はじめから</button>
@@ -326,13 +346,17 @@
   }
 
   function tutorialNeedsWellRepair() {
-    return state.flags.firstStoneGathered && !state.flags.wellBuilt;
+    return state.tutorialStep === 'repairWell';
+  }
+
+  function isTutorialLocked() {
+    return ['repairWell', 'sleepAfterWell', 'meetSlamin', 'assignSlamin', 'complete'].includes(state.tutorialStep);
   }
 
   function needsTabDot(tab) {
-    if (tab === 'actions' && !state.flags.firstStoneGathered) return true;
-    if (tab === 'build' && tutorialNeedsWellRepair()) return true;
-    if (tab === 'base' && state.flags.slaminEventReady && !state.flags.slaminJoined) return true;
+    if (tab === 'actions' && ['collectStone', 'sleepAfterWell'].includes(state.tutorialStep)) return true;
+    if (tab === 'build' && state.tutorialStep === 'repairWell') return true;
+    if (tab === 'base' && ['meetSlamin', 'assignSlamin'].includes(state.tutorialStep)) return true;
     return false;
   }
 
@@ -392,17 +416,23 @@
   }
 
   function facilitySceneNote(facilityId) {
+    const step = state.tutorialStep;
     if (facilityId === 'plaza') {
-      if (!state.flags.firstStoneGathered) return 'シャノンと拠点づくりを始めます。「行動」から石材を集めましょう。';
-      if (tutorialNeedsWellRepair()) return '井戸を直す石材が揃いました。「建築」から修復を進めましょう。';
-      if (state.flags.slaminJoined && !getResidentFacility('slamin')) return 'スラミンは今、広場でのんびりしています。設備に配置することもできます。';
+      if (step === 'collectStone') return 'シャノンと拠点づくりを始めます。「行動」から石材を5個集めましょう。';
+      if (step === 'repairWell') return '井戸を直す石材が揃いました。「建築」から修復を進めましょう。';
+      if (step === 'sleepAfterWell') return '井戸の修復は完了しました。今夜は休んで、翌朝を迎えましょう。';
+      if (step === 'meetSlamin') return '井戸の方から、何か妙な気配がします。❗を確認してみましょう。';
+      if (step === 'assignSlamin') return 'スラミンが仲間になりました。井戸に配置して「浄化」を試しましょう。';
+      if (step === 'complete') return '最初の実装範囲はここまで。設備ページと住民配置は引き続き確認できます。';
       return '拠点の中心になる広場。シャノンはここで様子を見ています。';
     }
     if (!state.flags.wellBuilt) return '壊れた井戸。石材5個があれば修復できます。';
-    if (state.flags.slaminEventReady && !state.flags.slaminJoined) return '井戸のそばに、見慣れない気配があります……。';
+    if (step === 'sleepAfterWell') return '井戸が直りました。今夜は休んで、翌朝を迎えましょう。';
+    if (step === 'meetSlamin') return '井戸のそばに見慣れない気配が……。❗をタップしましょう。';
+    if (step === 'assignSlamin') return '「設備情報・配置」からスラミンを井戸に配置してみましょう。';
     if (state.flags.slaminAssignedToWell) return 'スラミンが井戸を浄化中。清潔度 +10。';
-    if (state.flags.slaminJoined) return '「設備情報」から住民を配置できます。';
-    return '井戸が直りました。夜を越えれば、何か変化があるかもしれません。';
+    if (state.flags.slaminJoined) return '「設備情報・配置」から住民を配置できます。';
+    return '修復された井戸。拠点の水場として使えそうです。';
   }
 
   function baseHtml() {
@@ -421,12 +451,11 @@
 
     const characters = residents.map((residentId, i) => sceneCharacterHtml(residentId, i, residents.length, id)).join('');
     const shannon = id === 'plaza'
-      ? `<button class="scene-character shannon-scene" id="shannon-object" style="--char-left:76%;--char-bottom:76px;--char-width:120px">
+      ? `<button class="scene-character shannon-scene" id="shannon-object" style="--char-left:76%;--char-bottom:78px;--char-width:132px">
           <img src="images/shannon.webp" alt="シャノン"><span>シャノン</span>
         </button>` : '';
 
     return `
-      ${state.flags.sliceComplete ? '<div class="prototype-banner">最初の実装範囲はここまでです。設備ページ切替と汎用配置も試せます。</div>' : ''}
       <div class="facility-scene time-${state.timeIndex}" id="facility-scene" data-facility="${id}">
         <div class="facility-scene-head">
           <div>
@@ -475,32 +504,44 @@
   }
 
   function actionsHtml() {
-    const tutorialLock = tutorialNeedsWellRepair();
-    const canAct = !state.flags.wellBuildStarted && !tutorialLock;
-    const night = state.timeIndex === 3;
-    const canGatherStone = canAct && (!state.flags.firstStoneGathered || state.flags.wellBuilt);
+    const step = state.tutorialStep;
+    let body = '';
+
+    if (step === 'collectStone') {
+      body = `<div class="tutorial-lock tutorial-focus"><strong>まずは井戸を直す石を集めよう</strong><p>最初のチュートリアルでは、ほかの行動はまだ選べません。</p></div>
+        <div class="card-stack">
+          <button class="action-card action-highlight" id="gather-stone">
+            <div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div>
+            <p class="card-desc">周囲の瓦礫から石材を5個集めます。</p>
+          </button>
+        </div>`;
+    } else if (step === 'repairWell') {
+      body = `<div class="tutorial-lock"><strong>井戸を修復しよう</strong><p>必要な石材5個が揃いました。修復を終えるまで、時間が進む行動は選べません。</p><button class="primary-btn" id="go-build">建築を開く</button></div>`;
+    } else if (step === 'sleepAfterWell') {
+      body = `<div class="tutorial-lock tutorial-focus"><strong>今日はここまで</strong><p>井戸の修復が終わりました。眠って翌朝を迎えましょう。</p></div>
+        <div class="card-stack">
+          <button class="action-card action-highlight" id="sleep-action">
+            <div class="card-head"><span class="card-title">🌙 眠る</span><span class="card-time">翌朝へ</span></div>
+            <p class="card-desc">1日目の夜を終えて、次の日の朝へ進みます。</p>
+          </button>
+        </div>`;
+    } else if (step === 'meetSlamin') {
+      body = `<div class="tutorial-lock"><strong>井戸に何かいる……？</strong><p>必須イベントが発生しています。井戸の❗を確認するまで、時間が進む行動は選べません。</p><button class="primary-btn" id="go-well-event">井戸へ行く</button></div>`;
+    } else if (step === 'assignSlamin') {
+      body = `<div class="tutorial-lock"><strong>スラミンを配置しよう</strong><p>井戸に「浄化」を得意とするスラミンを配置して、設備効果を試しましょう。</p><button class="primary-btn" id="go-well-assign">井戸の配置を開く</button></div>`;
+    } else if (step === 'complete') {
+      body = `<div class="tutorial-lock complete-card"><strong>最初の実装範囲はここまで</strong><p>この版ではスラミン加入と設備配置まで確認できます。時間を進める行動は、次の実装範囲を追加するまで停止しています。</p></div>`;
+    } else {
+      body = `<div class="card-stack">
+        <button class="action-card" id="gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。</p></button>
+        <button class="action-card" id="gather-wood"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。</p></button>
+      </div>`;
+    }
+
     return `<section class="page">
       <h2 class="page-title">行動</h2>
-      <p class="page-lead">主人公が行動すると、ゲーム内時間が1区分進みます。</p>
-      ${tutorialLock ? `<div class="tutorial-lock"><strong>井戸修復を進めよう</strong><p>必要な石材5個が揃いました。チュートリアル中のため、井戸を修復するまで時間が進む行動は選べません。</p><button class="primary-btn" id="go-build">建築を開く</button></div>` : ''}
-      <div class="card-stack">
-        <button class="action-card" id="gather-stone" ${canGatherStone ? '' : 'disabled'}>
-          <div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div>
-          <p class="card-desc">周囲の瓦礫から使えそうな石材を集めます。${!state.flags.firstStoneGathered ? '初回は石材+5。' : '石材+5。'}</p>
-        </button>
-        <button class="action-card" id="gather-wood" ${state.flags.wellBuilt && canAct ? '' : 'disabled'}>
-          <div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div>
-          <p class="card-desc">周辺から使えそうな木材を集めます。井戸修復後に利用できます。</p>
-        </button>
-        <button class="action-card" id="rest-action" ${canAct ? '' : 'disabled'}>
-          <div class="card-head"><span class="card-title">☕ 休む</span><span class="card-time">1区分</span></div>
-          <p class="card-desc">何もせず時間を進めます。</p>
-        </button>
-        ${night ? `<button class="action-card" id="sleep-action" ${canAct ? '' : 'disabled'}>
-          <div class="card-head"><span class="card-title">🌙 眠る</span><span class="card-time">翌朝へ</span></div>
-          <p class="card-desc">夜を終えて、次の日の朝へ進みます。</p>
-        </button>` : ''}
-      </div>
+      <p class="page-lead">チュートリアル中は、次に必要な行動だけが解放されます。</p>
+      ${body}
     </section>`;
   }
 
@@ -574,7 +615,8 @@
         return `<div class="placed-row"><img src="${r.image}" alt="${r.name}"><div><strong>${r.name}</strong><small>得意：${r.ability}</small></div><button class="mini-btn" data-unassign="${id}" data-from="${facilityId}">外す</button></div>`;
       }).join('')}</div>` : (!isBrokenWell ? '<p class="muted-text">配置中の住民はいません。</p>' : '')}
       <div class="sheet-actions">
-        ${usable ? `<button class="primary-btn" id="open-resident-select">${placed.length >= facility.capacity ? '住民を入れ替える' : '住民を配置する'}</button>` : ''}
+        ${usable && !(state.tutorialStep === 'assignSlamin' && facilityId !== 'well') ? `<button class="primary-btn" id="open-resident-select">${placed.length >= facility.capacity ? '住民を入れ替える' : '住民を配置する'}</button>` : ''}
+        ${state.tutorialStep === 'assignSlamin' && facilityId !== 'well' ? '<p class="muted-text">チュートリアル中は、先にスラミンを井戸へ配置しましょう。</p>' : ''}
         <button class="secondary-btn" id="close-sheet">閉じる</button>
       </div>
     </section></div>`;
@@ -688,43 +730,56 @@
     bindSwipe();
 
     document.getElementById('gather-stone')?.addEventListener('click', () => {
-      if (tutorialNeedsWellRepair()) return;
+      if (state.tutorialStep !== 'collectStone' && state.tutorialStep !== 'free') return;
       state.resources.stone += 5;
-      state.flags.firstStoneGathered = true;
+      if (state.tutorialStep === 'collectStone') {
+        state.flags.firstStoneGathered = true;
+        setTutorialStep('repairWell');
+      }
       advanceTime(1);
-      toast('石材 +5。井戸を修復できるようになりました');
+      toast(state.tutorialStep === 'repairWell' ? '石材 +5。次は井戸を修復しましょう' : '石材 +5');
       renderGame();
     });
 
     document.getElementById('gather-wood')?.addEventListener('click', () => {
-      if (tutorialNeedsWellRepair()) return;
+      if (state.tutorialStep !== 'free') return;
       state.resources.wood += 5;
       advanceTime(1);
       toast('木材 +5');
       renderGame();
     });
 
-    document.getElementById('rest-action')?.addEventListener('click', () => {
-      if (tutorialNeedsWellRepair()) return;
-      advanceTime(1);
-      toast('少し休みました');
-      renderGame();
-    });
-
     document.getElementById('sleep-action')?.addEventListener('click', () => {
-      if (tutorialNeedsWellRepair()) return;
+      if (state.tutorialStep !== 'sleepAfterWell') return;
       state.day += 1;
       state.timeIndex = 0;
       runTimeTriggers();
       save(true);
       toast(`${state.day}日目の朝になりました`);
       state.currentTab = 'base';
+      state.currentFacility = 'well';
       renderGame();
     });
 
     document.getElementById('go-build')?.addEventListener('click', () => {
       state.currentTab = 'build';
       overlay = null;
+      save(true);
+      renderGame();
+    });
+
+    document.getElementById('go-well-event')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'well';
+      overlay = null;
+      save(true);
+      renderGame();
+    });
+
+    document.getElementById('go-well-assign')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'well';
+      overlay = { type:'facility', facilityId:'well' };
       save(true);
       renderGame();
     });
@@ -742,6 +797,7 @@
         advanceTime(2);
         state.flags.wellBuildStarted = false;
         state.flags.wellBuilt = true;
+        setTutorialStep('sleepAfterWell');
         state.currentTab = 'base';
         state.currentFacility = 'well';
         save(true);
@@ -761,6 +817,7 @@
       playDialogue(SLAMIN_EVENT, () => {
         state.flags.slaminEventReady = false;
         state.flags.slaminJoined = true;
+        setTutorialStep('assignSlamin');
         recalculateStats();
         save(true);
         state.currentTab = 'base';
