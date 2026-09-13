@@ -129,7 +129,7 @@
     const show = () => {
       const line = lines[index];
       const charHtml = line.char
-        ? `<img class="dialogue-char ${line.char === 'slamin' ? 'slamin' : ''}" src="assets/${line.char === 'shannon' ? 'shannon.webp' : 'slamin.webp'}" alt="${escapeHtml(line.speaker)}">`
+        ? `<img class="dialogue-char ${line.char === 'slamin' ? 'slamin' : ''}" src="images/${line.char === 'shannon' ? 'shannon.webp' : 'slamin.webp'}" alt="${escapeHtml(line.speaker)}">`
         : '';
       app.innerHTML = `
         <section class="dialogue-screen">
@@ -248,7 +248,7 @@
     const eventPin = state.flags.slaminEventReady && !state.flags.slaminJoined
       ? `<button class="event-pin event-well" id="slamin-event" aria-label="イベント">!</button>` : '';
     const slamin = state.flags.slaminJoined
-      ? `<button class="object-btn slamin-object" id="slamin-object"><img src="assets/slamin.webp" alt="スラミン"><span class="object-name">スラミン</span></button>` : '';
+      ? `<button class="object-btn slamin-object" id="slamin-object"><img src="images/slamin.webp" alt="スラミン"><span class="object-name">スラミン</span></button>` : '';
     const assignmentNote = state.flags.slaminAssignedToWell
       ? 'スラミンが井戸を浄化中。清潔度が上がっています。'
       : state.flags.slaminJoined
@@ -260,8 +260,8 @@
       ${state.flags.sliceComplete ? '<div class="prototype-banner">最初の実装範囲はここまでです。スラミン加入と設備配置まで試せます。次はリリー来訪・栽培へ拡張できます。</div>' : ''}
       <div class="base-scene">
         <div class="location-label">寂れた広場</div>
-        <button class="object-btn well-object ${wellClass}" id="well-object"><img src="assets/well.webp" alt="${wellName}"><span class="object-name">${wellName}</span></button>
-        <button class="object-btn shannon-object" id="shannon-object"><img src="assets/shannon.webp" alt="シャノン"><span class="object-name">シャノン</span></button>
+        <button class="object-btn well-object ${wellClass}" id="well-object"><img src="images/well.webp" alt="${wellName}"><span class="object-name">${wellName}</span></button>
+        <button class="object-btn shannon-object" id="shannon-object"><img src="images/shannon.webp" alt="シャノン"><span class="object-name">シャノン</span></button>
         ${slamin}
         ${eventPin}
         <div class="scene-note">${assignmentNote}</div>
