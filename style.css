@@ -238,3 +238,21 @@ button:focus-visible { outline:3px solid rgba(217,180,110,.5); outline-offset:2p
 @media (max-height: 720px) {
   .hut-focus { width:250px; height:225px; bottom:90px; }
 }
+
+
+/* v1.2: task notices must never be hidden behind another resident.
+   Raising the resident that owns a notice lifts the whole stacking context,
+   so its centered notice stays visibly above neighboring character art. */
+.scene-character.has-notice { z-index:18; }
+.scene-character.has-notice .character-status-badge { z-index:2; }
+
+/* Friend cards are another entrance to the same resident detail/actions. */
+.resident-list-button {
+  width:100%;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.resident-list-button:active { transform:scale(.995); }
+.resident-list-button:focus-visible { outline:2px solid rgba(217,180,110,.65); outline-offset:2px; }
