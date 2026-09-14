@@ -94,7 +94,7 @@
   };
 
   const defaultState = () => ({
-    version: 10,
+    version: 11,
     started: false,
     tutorialStep: 'collectStone',
     currentTab: 'base',
@@ -232,8 +232,16 @@
         state.assignments.well = ['slamin'];
       }
 
-      state.version = 10;
+      state.version = 11;
       recalculateStats();
+
+      // 加入済みキャラの来訪フラグは必ず消す。
+      // 旧版で栽培・探索を繰り返した際に来訪フラグが再点灯したセーブもここで復旧する。
+      if (state.flags.slaminJoined) state.flags.slaminEventReady = false;
+      if (state.flags.lilyJoined) state.flags.lilyEventReady = false;
+      if (state.flags.pochiJoined) state.flags.pochiEventReady = false;
+      if (state.flags.bunnyJoined) state.flags.bunnyEventReady = false;
+      if (state.flags.makisuJoined) state.flags.makisuEventReady = false;
 
       if (!parsed.tutorialStep) state.tutorialStep = deriveTutorialStep();
 
@@ -258,6 +266,18 @@
         state.flags.hutProposalSeen = false;
         state.flags.hutUnlocked = false;
         state.tutorialStep = 'hutProposal';
+      }
+
+      // v1.0以前で、サブタスク完了が小屋編のチュートリアル段階を上書きしていたセーブを復旧。
+      if ((parsed.version || 0) < 11) {
+        const staleArrivalStep =
+          (state.tutorialStep === 'meetPochi' && state.flags.pochiJoined) ||
+          (state.tutorialStep === 'meetBunny' && state.flags.bunnyJoined) ||
+          (state.tutorialStep === 'meetLily' && state.flags.lilyJoined) ||
+          (state.tutorialStep === 'meetSlamin' && state.flags.slaminJoined);
+        const sideTaskOverwroteMain =
+          state.tasks.construction && ['waitCultivation', 'harvestCultivation', 'waitExploration', 'explorationReady'].includes(state.tutorialStep);
+        if (staleArrivalStep || sideTaskOverwroteMain) state.tutorialStep = deriveTutorialStep();
       }
 
       if (state.flags.hutBuilt && !state.flags.makisuJoined) {
@@ -337,6 +357,31 @@
   function residentAwayFromBase(residentId) {
     const task = state.tasks.exploration;
     return !!(task && task.residentId === residentId && !task.ready);
+  }
+
+  function residentInConstruction(residentId) {
+    const task = state.tasks.construction;
+    return !!(task && !task.ready && task.residentIds?.includes(residentId));
+  }
+
+  // 「探索」と「建築」はどちらも能動的な仕事として排他。
+  // 栽培は仕込み後に植物が育つ待ち時間とみなし、建築との併行を許可する。
+  function residentActiveTask(residentId) {
+    const exploration = state.tasks.exploration;
+    if (exploration && exploration.residentId === residentId) return 'exploration';
+    if (residentInConstruction(residentId)) return 'construction';
+    return null;
+  }
+
+  function canStartExploration(residentId) {
+    if (!joinedResidentIds().includes(residentId)) return false;
+    if (RESIDENTS[residentId]?.ability !== '探索') return false;
+    if (state.tasks.exploration) return false;
+    return !residentInConstruction(residentId);
+  }
+
+  function canJoinConstruction(residentId) {
+    return joinedResidentIds().includes(residentId) && !residentActiveTask(residentId);
   }
 
   function residentBusyText(residentId) {
@@ -463,7 +508,9 @@
     if (cultivation && !cultivation.ready && state.day >= cultivation.finishDay && state.timeIndex === 0) {
       cultivation.ready = true;
       state.flags.cultivationReady = true;
-      setTutorialStep('harvestCultivation');
+      // 初回チュートリアル中だけ進行段階を切り替える。
+      // 小屋建築など後半の進行中に栽培しても、メイン進行を乗っ取らない。
+      if (state.tutorialStep === 'waitCultivation') setTutorialStep('harvestCultivation');
     }
   }
   function startNewGame() {
@@ -516,7 +563,7 @@
         <div>
           <div class="title-kicker">MONSTER GIRL SETTLEMENT</div>
           <h1 class="title-logo">終末</h1>
-          <p class="title-sub">スマートフォン向け プロトタイプ v1.0</p>
+          <p class="title-sub">スマートフォン向け プロトタイプ v1.1</p>
         </div>
         <div class="title-actions">
           <button class="primary-btn" id="new-game">はじめから</button>
@@ -620,13 +667,35 @@
     return [...ids].sort((a, b) => hash(`${seed}:${a}`) - hash(`${seed}:${b}`));
   }
 
+  function residentNeedsAttention(residentId) {
+    if (residentId === 'lily' && state.tasks.cultivation?.ready) return true;
+    if (residentId === 'pochi' && state.tasks.exploration?.ready) return true;
+    if (residentId === 'bunny' && state.tutorialStep === 'hutProposal') return true;
+    return false;
+  }
+
   function facilityResidentsForScene(facilityId) {
     if (facilityId === 'plaza') {
-      const maxVisible = 10;
-      const explicitlyPlaced = (state.assignments.plaza || []).filter(id => !residentAwayFromBase(id));
-      const idle = joinedResidentIds().filter(id => !getResidentFacility(id) && !residentAwayFromBase(id));
-      const shuffledIdle = stableResidentOrder(idle, `plaza-day-${state.day}`);
-      return [...explicitlyPlaced.slice(0, maxVisible), ...shuffledIdle.slice(0, Math.max(0, maxVisible - explicitlyPlaced.length))];
+      // 広場のゲーム上の配置上限は10人だが、画面描画は通常住民3人まで。
+      // シャノンは別枠で常時表示する。通知待ち > 広場正式配置 > 未配置住民の順で優先し、
+      // 人数が多い場合は日ごとに表示メンバーが入れ替わる。
+      const maxVisible = 3;
+      const available = joinedResidentIds().filter(id => !residentAwayFromBase(id));
+      const attention = stableResidentOrder(available.filter(residentNeedsAttention), `plaza-attention-${state.day}`);
+      const explicitlyPlaced = stableResidentOrder(
+        (state.assignments.plaza || []).filter(id => available.includes(id) && !attention.includes(id)),
+        `plaza-placed-${state.day}`
+      );
+      const idle = stableResidentOrder(
+        available.filter(id => !getResidentFacility(id) && !attention.includes(id)),
+        `plaza-idle-${state.day}`
+      );
+      const visible = [];
+      for (const id of [...attention, ...explicitlyPlaced, ...idle]) {
+        if (!visible.includes(id)) visible.push(id);
+        if (visible.length >= maxVisible) break;
+      }
+      return visible;
     }
     return (state.assignments[facilityId] || []).filter(id => !residentAwayFromBase(id));
   }
@@ -646,11 +715,9 @@
   }
   function characterPosition(facilityId, index, count) {
     const plazaPositions = [
-      { left: 24, bottom: 146, width: 102 }, { left: 48, bottom: 140, width: 96 },
-      { left: 28, bottom: 226, width: 86 }, { left: 51, bottom: 232, width: 84 },
-      { left: 70, bottom: 228, width: 82 }, { left: 16, bottom: 308, width: 72 },
-      { left: 36, bottom: 304, width: 72 }, { left: 57, bottom: 306, width: 72 },
-      { left: 76, bottom: 310, width: 68 }, { left: 45, bottom: 382, width: 64 }
+      { left: 20, bottom: 146, width: 100 },
+      { left: 45, bottom: 142, width: 96 },
+      { left: 31, bottom: 226, width: 84 }
     ];
     const wellPositions = [
       { left: 72, bottom: 146, width: 112 }, { left: 25, bottom: 150, width: 104 }
@@ -766,11 +833,13 @@
   }
   function friendsHtml() {
     const residentStatus = id => {
+      const statuses = [];
       if (id === 'lily' && state.tasks.cultivation) {
-        return state.tasks.cultivation.ready ? '栽培完了・受け取り待ち' : '栽培中（翌朝完成）';
+        statuses.push(state.tasks.cultivation.ready ? '栽培完了・受け取り待ち' : '栽培中（翌朝完成）');
       }
       const busy = residentBusyText(id);
-      if (busy) return busy;
+      if (busy) statuses.push(busy);
+      if (statuses.length) return statuses.join(' / ');
       const place = getResidentFacility(id);
       return place ? `${facilityName(place)}に配置中` : '拠点で待機中';
     };
@@ -858,6 +927,10 @@
           <button class="action-card" id="hut-build-gather-wood"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。建築も1区分進みます。</p></button>
           <button class="action-card" id="hut-build-gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。建築も1区分進みます。</p></button>
           <button class="action-card" id="hut-build-rest"><div class="card-head"><span class="card-title">☕ 休む</span><span class="card-time">1区分</span></div><p class="card-desc">何も得ずに1区分進めます。</p></button>
+          ${state.flags.pochiJoined && !state.tasks.exploration ? `<button class="action-card" id="open-exploration" ${residentInConstruction('pochi') ? 'disabled' : ''}><div class="card-head"><span class="card-title">🐾 ポチに探索をお願いする</span><span class="card-time">依頼は0区分</span></div><p class="card-desc">${residentInConstruction('pochi') ? 'ポチは建築に参加中のため、今は探索へ出せません。' : '小屋の建築と並行して近隣探索を進められます。'}</p></button>` : ''}
+          ${state.flags.lilyJoined && !state.tasks.cultivation && state.items.matari > 0 ? `<button class="action-card" id="open-lily-side-cultivation"><div class="card-head"><span class="card-title">🌱 リリーに栽培をお願いする</span><span class="card-time">依頼は0区分</span></div><p class="card-desc">栽培は建築と並行できます。翌朝に受け取り可能になります。</p></button>` : ''}
+          ${state.tasks.exploration ? `<div class="ready-note">🐾 ポチ：${state.tasks.exploration.ready ? '探索完了・報告待ち' : `探索中（あと${state.tasks.exploration.remaining}区分）`}</div>` : ''}
+          ${state.tasks.cultivation ? `<div class="ready-note">🌱 リリー：${state.tasks.cultivation.ready ? '栽培完了・受け取り待ち' : '栽培中'}</div>` : ''}
         </div>`;
     } else if (step === 'meetMakisu') {
       body = `<div class="tutorial-lock"><strong>完成した小屋に来訪者</strong><p>簡素な小屋の近くに、見慣れない魔物娘が来ています。小屋の❗を確認しましょう。</p><button class="primary-btn" id="go-makisu-event">簡素な小屋へ</button></div>`;
@@ -997,21 +1070,22 @@
 
   function builderSelectOverlay() {
     const selected = Array.isArray(overlay?.selected) ? overlay.selected : [];
-    const candidates = joinedResidentIds().filter(id => !residentAwayFromBase(id));
+    const candidates = joinedResidentIds();
     return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet tall-sheet" role="dialog" aria-modal="true">
       <div class="sheet-handle"></div><h2>建築を手伝う住民</h2>
-      <p>簡素な小屋には3人の協力が必要です。設備に配置中の住民を選んでも、配置効果は維持されます。</p>
+      <p>簡素な小屋には3人の協力が必要です。設備に配置中の住民を選んでも配置効果は維持されます。探索中・探索報告待ちの住民は建築に参加できません。栽培中のリリーは参加できます。</p>
       <div class="resident-select-list">
         ${candidates.map(id => {
           const r = RESIDENTS[id];
           const chosen = selected.includes(id);
-          const busy = !!residentBusyText(id);
-          return `<button class="resident-select-card ${chosen ? 'selected' : ''}" data-toggle-builder="${id}" ${busy && !chosen ? 'disabled' : ''}>
+          const canBuild = chosen || canJoinConstruction(id);
+          const busy = !canBuild ? residentBusyText(id) || 'ほかの仕事中' : null;
+          return `<button class="resident-select-card ${chosen ? 'selected' : ''}" data-toggle-builder="${id}" ${!canBuild ? 'disabled' : ''}>
             <img src="${r.image}" alt="${r.name}">
             <div class="resident-card-body">
               <div class="resident-card-title"><strong>${r.name}</strong><span class="badge">${r.species}</span></div>
               <p>得意：${r.ability}</p>
-              <small>${busy ? residentBusyText(id) : getResidentFacility(id) ? `現在：${facilityName(getResidentFacility(id))}に配置中` : '現在：待機中'}</small>
+              <small>${busy ? busy : (id === 'lily' && state.tasks.cultivation) ? '栽培中（建築参加可）' : getResidentFacility(id) ? `現在：${facilityName(getResidentFacility(id))}に配置中` : '現在：待機中'}</small>
               <em class="${chosen ? 'effect-good' : 'effect-none'}">${chosen ? '✓ 建築に参加' : 'タップして選択'}</em>
             </div>
           </button>`;
@@ -1038,11 +1112,14 @@
     const explorers = joinedResidentIds().filter(id => RESIDENTS[id]?.ability === '探索');
     return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet tall-sheet" role="dialog" aria-modal="true">
       <div class="sheet-handle"></div><h2>探索する住民を選ぶ</h2>
-      <p>近隣探索：所要2区分。探索中の住民は拠点画面から離れます。帰還時に木材4〜8、石材4〜8を持ち帰ります。</p>
+      <p>近隣探索：所要2区分。探索中の住民は拠点を離れます。建築に参加中の住民は探索へ出せません。</p>
       <div class="resident-select-list">
         ${explorers.length ? explorers.map(id => {
           const r = RESIDENTS[id];
-          return `<button class="resident-select-card" data-start-explorer="${id}"><img src="${r.image}" alt="${r.name}"><div class="resident-card-body"><div class="resident-card-title"><strong>${r.name}</strong><span class="badge">${r.species}</span></div><p>得意：${r.ability}</p><small>現在：${getResidentFacility(id) ? facilityName(getResidentFacility(id)) + 'に配置中' : '待機中'}</small><em class="effect-good">✓ 探索可能</em></div></button>`;
+          const canExplore = canStartExploration(id);
+          const busy = residentBusyText(id);
+          const status = busy || (getResidentFacility(id) ? facilityName(getResidentFacility(id)) + 'に配置中' : '待機中');
+          return `<button class="resident-select-card" data-start-explorer="${id}" ${canExplore ? '' : 'disabled'}><img src="${r.image}" alt="${r.name}"><div class="resident-card-body"><div class="resident-card-title"><strong>${r.name}</strong><span class="badge">${r.species}</span></div><p>得意：${r.ability}</p><small>現在：${status}</small><em class="${canExplore ? 'effect-good' : 'effect-none'}">${canExplore ? '✓ 探索可能' : '探索できません'}</em></div></button>`;
         }).join('') : '<div class="empty-state">探索を得意とする住民がいません。</div>'}
       </div>
       <div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div>
@@ -1092,12 +1169,18 @@
           extra = `<div class="effect-box"><strong>📦 探索完了</strong><p>木材 ${explorationTask.reward?.wood ?? 0}、石材 ${explorationTask.reward?.stone ?? 0} を持ち帰っています。</p></div><button class="primary-btn" id="receive-exploration">探索結果を受け取る</button>`;
         } else if (explorationTask) {
           extra = `<div class="effect-box"><strong>🐾 探索中</strong><p>帰還まであと${explorationTask.remaining}区分です。</p></div>`;
+        } else if (residentInConstruction('pochi')) {
+          extra = `<div class="effect-box"><strong>🔨 建築中</strong><p>ポチは簡素な小屋の建築に参加中です。建築が終わるまで探索には出せません。</p></div>`;
+        } else {
+          extra = `<button class="primary-btn" id="open-exploration">探索をお願いする</button>`;
         }
       }
       if (r.id === 'bunny' && state.tutorialStep === 'hutProposal') {
         extra = `<div class="effect-box"><strong>💬 相談があるようです</strong><p>人数が増えた拠点について、バーニィに考えがあるようです。</p></div><button class="primary-btn" id="hear-hut-proposal">話を聞く</button>`;
       }
-      const stateText = task ? (task.ready ? '栽培完了' : '栽培中') : explorationTask ? (explorationTask.ready ? '探索から帰還' : `探索中・あと${explorationTask.remaining}区分`) : (place ? facilityName(place) + 'に配置中' : '拠点で待機中');
+      const busyText = residentBusyText(r.id);
+      const cultivationText = task ? (task.ready ? '栽培完了' : '栽培中') : null;
+      const stateText = [cultivationText, busyText].filter(Boolean).join(' / ') || (place ? facilityName(place) + 'に配置中' : '拠点で待機中');
       return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><h2>${r.name}</h2><p>${r.species} / ${r.lineage}<br>得意：${r.ability}<br>状態：${stateText}</p>${extra}<div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div></section></div>`;
     }
     return '';
@@ -1341,6 +1424,7 @@
     });
 
     document.getElementById('slamin-event')?.addEventListener('click', () => {
+      if (state.flags.slaminJoined) { state.flags.slaminEventReady = false; save(true); renderGame(); return; }
       playDialogue(SLAMIN_EVENT, () => {
         state.flags.slaminEventReady = false;
         state.flags.slaminJoined = true;
@@ -1355,6 +1439,7 @@
     });
 
     document.getElementById('lily-event')?.addEventListener('click', () => {
+      if (state.flags.lilyJoined) { state.flags.lilyEventReady = false; save(true); renderGame(); return; }
       playDialogue(LILY_EVENT, () => {
         state.flags.lilyEventReady = false;
         state.flags.lilyJoined = true;
@@ -1371,6 +1456,7 @@
     });
 
     document.getElementById('pochi-event')?.addEventListener('click', () => {
+      if (state.flags.pochiJoined) { state.flags.pochiEventReady = false; save(true); renderGame(); return; }
       playDialogue(POCHI_EVENT, () => {
         state.flags.pochiEventReady = false;
         state.flags.pochiJoined = true;
@@ -1385,6 +1471,7 @@
     });
 
     document.getElementById('bunny-event')?.addEventListener('click', () => {
+      if (state.flags.bunnyJoined) { state.flags.bunnyEventReady = false; save(true); renderGame(); return; }
       playDialogue(BUNNY_EVENT, () => {
         state.flags.bunnyEventReady = false;
         state.flags.bunnyJoined = true;
@@ -1399,6 +1486,7 @@
     });
 
     document.getElementById('makisu-event')?.addEventListener('click', () => {
+      if (state.flags.makisuJoined) { state.flags.makisuEventReady = false; save(true); renderGame(); return; }
       playDialogue(MAKISU_EVENT, () => {
         state.flags.makisuEventReady = false;
         state.flags.makisuJoined = true;
@@ -1451,6 +1539,12 @@
     document.getElementById('start-hut-construction')?.addEventListener('click', () => {
       const selected = Array.isArray(overlay?.selected) ? overlay.selected : [];
       if (selected.length !== 3 || state.resources.wood < 20 || state.resources.stone < 20 || state.tasks.construction) return;
+      if (selected.some(id => !canJoinConstruction(id))) {
+        toast('探索中など、ほかの仕事をしている住民は建築に参加できません');
+        overlay = { type:'builderSelect', selected: selected.filter(canJoinConstruction) };
+        renderGame();
+        return;
+      }
       state.resources.wood -= 20;
       state.resources.stone -= 20;
       state.flags.hutBuildStarted = true;
@@ -1528,6 +1622,11 @@
       renderGame();
     });
 
+    document.getElementById('open-lily-side-cultivation')?.addEventListener('click', () => {
+      overlay = { type:'cultivation' };
+      renderGame();
+    });
+
     document.getElementById('open-exploration')?.addEventListener('click', () => {
       overlay = { type:'exploration' };
       renderGame();
@@ -1535,12 +1634,16 @@
 
     document.querySelectorAll('[data-start-explorer]').forEach(btn => btn.addEventListener('click', () => {
       const residentId = btn.dataset.startExplorer;
-      if (state.tasks.exploration || RESIDENTS[residentId]?.ability !== '探索') return;
+      if (!canStartExploration(residentId)) {
+        if (residentInConstruction(residentId)) toast(`${RESIDENTS[residentId].name}は建築に参加中です`);
+        return;
+      }
+      const initialTutorial = state.tutorialStep === 'startExploration';
       facilityOrder().forEach(id => { state.assignments[id] = (state.assignments[id] || []).filter(x => x !== residentId); });
       state.tasks.exploration = { residentId, remaining: 2, ready: false, reward: null };
       state.flags.explorationStarted = true;
       state.flags.explorationReady = false;
-      setTutorialStep('waitExploration');
+      if (initialTutorial) setTutorialStep('waitExploration');
       overlay = null;
       save(true);
       renderGame();
@@ -1554,6 +1657,7 @@
 
     document.getElementById('start-cultivation')?.addEventListener('click', () => {
       if (state.items.matari < 1 || state.tasks.cultivation) return;
+      const initialTutorial = state.tutorialStep === 'startCultivation';
       state.items.matari -= 1;
       state.tasks.cultivation = {
         residentId: 'lily',
@@ -1563,7 +1667,7 @@
       };
       state.flags.cultivationStarted = true;
       state.flags.cultivationReady = false;
-      setTutorialStep('waitCultivation');
+      if (initialTutorial) setTutorialStep('waitCultivation');
       overlay = null;
       save(true);
       renderGame();
@@ -1572,17 +1676,22 @@
 
     document.getElementById('receive-cultivation')?.addEventListener('click', () => {
       if (!state.tasks.cultivation?.ready) return;
+      const initialTutorial = state.tutorialStep === 'harvestCultivation';
       state.items.matari += 5;
       state.tasks.cultivation = null;
       state.flags.cultivationReady = false;
       state.flags.cultivationHarvested = true;
-      state.flags.pochiEventReady = foodCount() >= 5;
-      state.flags.sliceComplete = false;
-      setTutorialStep(state.flags.pochiEventReady ? 'meetPochi' : 'free');
+
+      // ポチの来訪は一度きり。加入済みなら食料条件を何度満たしても再発生しない。
+      const invitePochi = !state.flags.pochiJoined && !state.flags.pochiEventReady && foodCount() >= 5;
+      state.flags.pochiEventReady = invitePochi;
+      if (invitePochi) state.flags.sliceComplete = false;
+      if (initialTutorial) setTutorialStep(invitePochi ? 'meetPochi' : deriveTutorialStep());
+
       overlay = null;
       save(true);
       renderGame();
-      toast(state.flags.pochiEventReady ? 'マタリの実 ×5。広場に誰か来たようです！' : 'マタリの実 ×5を受け取りました！');
+      toast(invitePochi ? 'マタリの実 ×5。広場に誰か来たようです！' : 'マタリの実 ×5を受け取りました！');
     });
 
     const updateHutMaterialStep = () => {
@@ -1661,19 +1770,24 @@
     document.getElementById('receive-exploration')?.addEventListener('click', () => {
       const task = state.tasks.exploration;
       if (!task?.ready) return;
+      const initialTutorial = state.tutorialStep === 'explorationReady';
       const reward = task.reward || { wood: 4, stone: 4 };
       state.resources.wood += reward.wood;
       state.resources.stone += reward.stone;
       state.tasks.exploration = null;
       state.flags.explorationReady = false;
       state.flags.explorationClaimed = true;
-      state.flags.bunnyEventReady = state.stats.liveliness >= 30;
-      state.flags.sliceComplete = false;
-      setTutorialStep(state.flags.bunnyEventReady ? 'meetBunny' : 'free');
+
+      // バーニィの来訪も一度きり。以降の探索は純粋な資材探索として扱う。
+      const inviteBunny = !state.flags.bunnyJoined && !state.flags.bunnyEventReady && state.stats.liveliness >= 30;
+      state.flags.bunnyEventReady = inviteBunny;
+      if (inviteBunny) state.flags.sliceComplete = false;
+      if (initialTutorial) setTutorialStep(inviteBunny ? 'meetBunny' : deriveTutorialStep());
+
       overlay = null;
       save(true);
       renderGame();
-      toast(state.flags.bunnyEventReady
+      toast(inviteBunny
         ? `探索報酬：木材 +${reward.wood} / 石材 +${reward.stone}。ポチが誰かを連れてきたようです！`
         : `探索報酬：木材 +${reward.wood} / 石材 +${reward.stone}`);
     });
