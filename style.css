@@ -224,3 +224,17 @@ button:focus-visible { outline:3px solid rgba(217,180,110,.5); outline-offset:2p
 
 /* v0.9: Bunny joins after the first exploration. */
 .dialogue-char.bunny { height:min(67vh, 610px); }
+
+/* v1.0: simple hut + Makisu */
+.hut-focus {
+  width:clamp(270px, 76vw, 340px);
+  height:clamp(245px, 70vw, 315px);
+  bottom:100px;
+}
+.dialogue-char.makisu { height:min(68vh, 620px); }
+@media (max-width: 360px) {
+  .hut-focus { width:260px; height:235px; bottom:96px; }
+}
+@media (max-height: 720px) {
+  .hut-focus { width:250px; height:225px; bottom:90px; }
+}

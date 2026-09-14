@@ -6,7 +6,6 @@
   const app = document.getElementById('app');
   const toastRoot = document.getElementById('toast-root');
 
-  const FACILITY_ORDER = ['plaza', 'well'];
   const FACILITIES = {
     plaza: {
       id: 'plaza',
@@ -27,6 +26,16 @@
       description: '修復された水場。拠点の暮らしを支える重要な設備。',
       effectAbility: '浄化',
       effectText: '「浄化」を持つ住民がいると清潔度 +10'
+    },
+    hut: {
+      id: 'hut',
+      name: '簡素な小屋',
+      capacity: 4,
+      development: 20,
+      tags: ['住居', '物置'],
+      description: 'みんなで建てた簡素な小屋。まだ粗末だが、雨風をしのげる場所になった。',
+      effectAbility: null,
+      effectText: 'プロトタイプでは特殊効果はありません。'
     }
   };
 
@@ -62,6 +71,14 @@
       lineage: '獣',
       ability: '盛り上げ',
       image: 'images/bunny.webp'
+    },
+    makisu: {
+      id: 'makisu',
+      name: 'マキス',
+      species: 'ゴーレム娘',
+      lineage: '物質',
+      ability: '建築',
+      image: 'images/makisu.webp'
     }
   };
 
@@ -72,11 +89,12 @@
     slamin:  { scale: 1.08, offsetX: 0, offsetY: 0, noticeYOffset: 0 },
     lily:    { scale: 1.24, offsetX: 0, offsetY: 2, noticeYOffset: 0 },
     pochi:   { scale: 1.70, offsetX: 0, offsetY: 0, noticeYOffset: 0 },
-    bunny:   { scale: 1.10, offsetX: 0, offsetY: 0, noticeYOffset: 0 }
+    bunny:   { scale: 1.10, offsetX: 0, offsetY: 0, noticeYOffset: 0 },
+    makisu:  { scale: 1.16, offsetX: 0, offsetY: 0, noticeYOffset: 0 }
   };
 
   const defaultState = () => ({
-    version: 9,
+    version: 10,
     started: false,
     tutorialStep: 'collectStone',
     currentTab: 'base',
@@ -85,9 +103,9 @@
     timeIndex: 0,
     resources: { wood: 0, stone: 0 },
     items: { matari: 0 },
-    tasks: { cultivation: null, exploration: null },
+    tasks: { cultivation: null, exploration: null, construction: null },
     stats: { development: 0, cleanliness: 0, liveliness: 0 },
-    assignments: { plaza: [], well: [] },
+    assignments: { plaza: [], well: [], hut: [] },
     flags: {
       prologueDone: false,
       firstStoneGathered: false,
@@ -110,6 +128,12 @@
       bunnyEventReady: false,
       bunnyJoined: false,
       bunnyAssignedToPlaza: false,
+      hutProposalSeen: false,
+      hutUnlocked: false,
+      hutBuildStarted: false,
+      hutBuilt: false,
+      makisuEventReady: false,
+      makisuJoined: false,
       sliceComplete: false
     },
     saveStamp: null
@@ -152,6 +176,21 @@
     { speaker: 'バーニィ', text: 'もちろん！ せっかくだし、もっと楽しい場所にしようよ。\n広場を盛り上げるなら任せて！', char: 'bunny' }
   ];
 
+  const HUT_PROPOSAL_EVENT = [
+    { speaker: 'バーニィ', text: 'ねえ、人数も増えてきたしさ。\nそろそろ、ちゃんと雨風をしのげる場所が欲しくない？', char: 'bunny' },
+    { speaker: 'シャノン', text: 'たしかに。今までは広場で何とかしてたけど、ずっとこのままってわけにもいかないね。', char: 'shannon' },
+    { speaker: 'バーニィ', text: 'みんなで手伝えば、小さな小屋くらい建てられるって！\n木材と石材を集めてみようよ。', char: 'bunny' }
+  ];
+
+  const MAKISU_EVENT = [
+    { speaker: '？？？', text: '……この小屋。\nここにある材料だけで、これを建てたのか？', char: 'makisu' },
+    { speaker: 'マキス', text: '私はマキス。ゴーレムだ。\n建物の噂を聞いて見に来た。', char: 'makisu' },
+    { speaker: 'マキス', text: '粗い。甘い。直したいところが山ほどある。\n……だが、だからこそ面白い。', char: 'makisu' },
+    { speaker: 'シャノン', text: 'それって、ここに残って手伝ってくれるってこと？', char: 'shannon' },
+    { speaker: 'マキス', text: 'ああ。もっと立派なものを建てよう。\n次は私にもやらせてくれ。', char: 'makisu' },
+    { speaker: 'シャノン', text: '最初は壊れた井戸しかなかったのに、ずいぶん賑やかになったね。\nここから、もっと大きな集落にしていこう。', char: 'shannon' }
+  ];
+
   const LILY_EVENT = [
     { speaker: 'シャノン', text: 'あれ？ 広場に誰か来てるみたい。', char: 'shannon' },
     { speaker: '？？？', text: 'ここ、前よりずっと空気が澄んでる。\nきれいな水の気配もするわ。', char: 'lily' },
@@ -183,17 +222,21 @@
       state.flags = { ...fresh.flags, ...(parsed.flags || {}) };
       state.assignments = {
         plaza: Array.isArray(parsed.assignments?.plaza) ? parsed.assignments.plaza : [],
-        well: Array.isArray(parsed.assignments?.well) ? parsed.assignments.well : []
+        well: Array.isArray(parsed.assignments?.well) ? parsed.assignments.well : [],
+        hut: Array.isArray(parsed.assignments?.hut) ? parsed.assignments.hut : []
       };
-      if (!FACILITY_ORDER.includes(state.currentFacility)) state.currentFacility = 'plaza';
 
-      // v0.1 のセーブをそのまま読み込めるように移行。
+      if (!facilityOrder().includes(state.currentFacility)) state.currentFacility = 'plaza';
+
       if (parsed.flags?.slaminAssignedToWell && !state.assignments.well.includes('slamin')) {
         state.assignments.well = ['slamin'];
       }
-      state.version = 9;
+
+      state.version = 10;
       recalculateStats();
+
       if (!parsed.tutorialStep) state.tutorialStep = deriveTutorialStep();
+
       if ((parsed.version || 0) < 4 && state.flags.slaminAssignedToWell && !state.flags.lilyJoined) {
         state.tutorialStep = 'waitLily';
         state.flags.sliceComplete = false;
@@ -203,19 +246,31 @@
         state.flags.sliceComplete = false;
         state.tutorialStep = 'meetPochi';
       }
-      // v0.8までで初回探索を受け取り済みなら、バーニィ編の直前へ移行。
       if ((parsed.version || 0) < 9 && state.flags.explorationClaimed && !state.flags.bunnyJoined) {
         state.flags.bunnyEventReady = true;
         state.flags.sliceComplete = false;
         state.tutorialStep = 'meetBunny';
       }
+
+      // v0.9の「完了」は、v1.0では小屋編の開始地点として扱う。
+      if ((parsed.version || 0) < 10 && state.flags.bunnyAssignedToPlaza && !state.flags.hutBuilt) {
+        state.flags.sliceComplete = false;
+        state.flags.hutProposalSeen = false;
+        state.flags.hutUnlocked = false;
+        state.tutorialStep = 'hutProposal';
+      }
+
+      if (state.flags.hutBuilt && !state.flags.makisuJoined) {
+        state.flags.makisuEventReady = true;
+        state.tutorialStep = 'meetMakisu';
+      }
+
       return true;
     } catch (err) {
       console.warn('Save load failed', err);
       return false;
     }
   }
-
   function resetSave() {
     localStorage.removeItem(SAVE_KEY);
     state = defaultState();
@@ -240,7 +295,12 @@
   function foodCount() { return state.items.matari || 0; }
 
   function deriveTutorialStep() {
-    if (state.flags.bunnyAssignedToPlaza || state.flags.sliceComplete) return 'complete';
+    if (state.flags.makisuJoined || state.flags.sliceComplete) return 'complete';
+    if (state.flags.makisuEventReady || state.flags.hutBuilt) return 'meetMakisu';
+    if (state.flags.hutBuildStarted || state.tasks.construction) return 'waitHutConstruction';
+    if (state.flags.hutUnlocked && state.resources.wood >= 20 && state.resources.stone >= 20) return 'buildHut';
+    if (state.flags.hutUnlocked) return 'collectHutMaterials';
+    if (state.flags.bunnyAssignedToPlaza && !state.flags.hutProposalSeen) return 'hutProposal';
     if (state.flags.bunnyJoined) return 'assignBunny';
     if (state.flags.bunnyEventReady || (state.flags.explorationClaimed && !state.flags.bunnyJoined)) return 'meetBunny';
     if (state.flags.explorationReady) return 'explorationReady';
@@ -258,37 +318,41 @@
     if (state.flags.firstStoneGathered) return 'repairWell';
     return 'collectStone';
   }
-
   function setTutorialStep(step) {
     state.tutorialStep = step;
   }
 
+  function facilityOrder() {
+    return state.flags.hutBuilt ? ['plaza', 'well', 'hut'] : ['plaza', 'well'];
+  }
   function joinedResidentIds() {
     const ids = [];
     if (state.flags.slaminJoined) ids.push('slamin');
     if (state.flags.lilyJoined) ids.push('lily');
     if (state.flags.pochiJoined) ids.push('pochi');
     if (state.flags.bunnyJoined) ids.push('bunny');
+    if (state.flags.makisuJoined) ids.push('makisu');
     return ids;
   }
-
   function residentAwayFromBase(residentId) {
     const task = state.tasks.exploration;
     return !!(task && task.residentId === residentId && !task.ready);
   }
 
   function residentBusyText(residentId) {
-    const task = state.tasks.exploration;
-    if (task && task.residentId === residentId) {
-      return task.ready ? '探索から帰還・報告待ち' : `探索中（あと${task.remaining}区分）`;
+    const exploration = state.tasks.exploration;
+    if (exploration && exploration.residentId === residentId) {
+      return exploration.ready ? '探索から帰還・報告待ち' : `探索中（あと${exploration.remaining}区分）`;
+    }
+    const construction = state.tasks.construction;
+    if (construction && construction.residentIds?.includes(residentId) && !construction.ready) {
+      return `簡素な小屋の建築を手伝い中（あと${construction.remaining}区分）`;
     }
     return null;
   }
-
   function getResidentFacility(residentId) {
-    return FACILITY_ORDER.find(id => (state.assignments[id] || []).includes(residentId)) || null;
+    return facilityOrder().find(id => (state.assignments[id] || []).includes(residentId)) || null;
   }
-
   function facilityName(id) {
     if (id === 'well' && !state.flags.wellBuilt) return '壊れた井戸';
     return FACILITIES[id]?.name || id;
@@ -296,15 +360,15 @@
 
   function isFacilityUsable(id) {
     if (id === 'well') return state.flags.wellBuilt;
+    if (id === 'hut') return state.flags.hutBuilt;
     return true;
   }
-
   function hasAbilityAtFacility(facilityId, ability) {
     return (state.assignments[facilityId] || []).some(residentId => RESIDENTS[residentId]?.ability === ability);
   }
 
   function recalculateStats() {
-    state.stats.development = state.flags.wellBuilt ? 10 : 0;
+    state.stats.development = (state.flags.wellBuilt ? 10 : 0) + (state.flags.hutBuilt ? 20 : 0);
     state.stats.cleanliness = state.flags.wellBuilt && hasAbilityAtFacility('well', '浄化') ? 10 : 0;
     state.stats.liveliness = joinedResidentIds().length * 10;
     if (hasAbilityAtFacility('plaza', '盛り上げ')) state.stats.liveliness += 20;
@@ -312,7 +376,6 @@
     state.flags.slaminAssignedToWell = (state.assignments.well || []).includes('slamin');
     state.flags.bunnyAssignedToPlaza = (state.assignments.plaza || []).includes('bunny');
   }
-
   function assignResident(residentId, facilityId) {
     if (!joinedResidentIds().includes(residentId) || !isFacilityUsable(facilityId)) return false;
     const facility = FACILITIES[facilityId];
@@ -322,7 +385,7 @@
     const target = state.assignments[facilityId] || [];
     if (target.length >= facility.capacity) return false;
 
-    FACILITY_ORDER.forEach(id => {
+    facilityOrder().forEach(id => {
       state.assignments[id] = (state.assignments[id] || []).filter(x => x !== residentId);
     });
     state.assignments[facilityId].push(residentId);
@@ -331,13 +394,12 @@
       setTutorialStep('waitLily');
     }
     if (residentId === 'bunny' && facilityId === 'plaza' && state.tutorialStep === 'assignBunny') {
-      state.flags.sliceComplete = true;
-      setTutorialStep('complete');
+      state.flags.bunnyAssignedToPlaza = true;
+      setTutorialStep('hutProposal');
     }
     save(true);
     return true;
   }
-
   function unassignResident(residentId, facilityId) {
     state.assignments[facilityId] = (state.assignments[facilityId] || []).filter(x => x !== residentId);
     recalculateStats();
@@ -368,7 +430,22 @@
           stone: 4 + Math.floor(Math.random() * 5)
         };
         state.flags.explorationReady = true;
-        setTutorialStep('explorationReady');
+        if (state.tutorialStep === 'waitExploration') setTutorialStep('explorationReady');
+      }
+    }
+
+    const construction = state.tasks.construction;
+    if (construction && !construction.ready) {
+      construction.remaining = Math.max(0, construction.remaining - 1);
+      if (construction.remaining === 0) {
+        construction.ready = true;
+        state.flags.hutBuildStarted = false;
+        state.flags.hutBuilt = true;
+        state.flags.makisuEventReady = true;
+        state.tasks.construction = null;
+        setTutorialStep('meetMakisu');
+        state.currentFacility = 'hut';
+        recalculateStats();
       }
     }
 
@@ -389,7 +466,6 @@
       setTutorialStep('harvestCultivation');
     }
   }
-
   function startNewGame() {
     state = defaultState();
     state.started = true;
@@ -409,7 +485,7 @@
     let index = 0;
     const show = () => {
       const line = lines[index];
-      const dialogueImages = { shannon: 'images/shannon.webp', slamin: 'images/slamin.webp', lily: 'images/lily.webp', pochi: 'images/pochi.webp', bunny: 'images/bunny.webp' };
+      const dialogueImages = { shannon: 'images/shannon.webp', slamin: 'images/slamin.webp', lily: 'images/lily.webp', pochi: 'images/pochi.webp', bunny: 'images/bunny.webp', makisu: 'images/makisu.webp' };
       const charHtml = line.char
         ? `<img class="dialogue-char ${line.char}" src="${dialogueImages[line.char]}" alt="${escapeHtml(line.speaker)}">`
         : '';
@@ -440,7 +516,7 @@
         <div>
           <div class="title-kicker">MONSTER GIRL SETTLEMENT</div>
           <h1 class="title-logo">終末</h1>
-          <p class="title-sub">スマートフォン向け プロトタイプ v0.6</p>
+          <p class="title-sub">スマートフォン向け プロトタイプ v1.0</p>
         </div>
         <div class="title-actions">
           <button class="primary-btn" id="new-game">はじめから</button>
@@ -506,12 +582,11 @@
   }
 
   function needsTabDot(tab) {
-    if (tab === 'actions' && ['collectStone', 'sleepAfterWell', 'waitLily', 'waitCultivation', 'startExploration', 'waitExploration'].includes(state.tutorialStep)) return true;
-    if (tab === 'build' && state.tutorialStep === 'repairWell') return true;
-    if (tab === 'base' && ['meetSlamin', 'assignSlamin', 'meetLily', 'startCultivation', 'harvestCultivation', 'meetPochi', 'explorationReady', 'meetBunny', 'assignBunny'].includes(state.tutorialStep)) return true;
+    if (tab === 'actions' && ['collectStone', 'sleepAfterWell', 'waitLily', 'waitCultivation', 'startExploration', 'waitExploration', 'collectHutMaterials', 'waitHutConstruction'].includes(state.tutorialStep)) return true;
+    if (tab === 'build' && ['repairWell', 'buildHut'].includes(state.tutorialStep)) return true;
+    if (tab === 'base' && ['meetSlamin', 'assignSlamin', 'meetLily', 'startCultivation', 'harvestCultivation', 'meetPochi', 'explorationReady', 'meetBunny', 'assignBunny', 'hutProposal', 'meetMakisu'].includes(state.tutorialStep)) return true;
     return false;
   }
-
   function bottomNavHtml() {
     const items = [
       ['base','🏠','拠点'], ['friends','👥','仲間'], ['actions','✋','行動'], ['build','🔨','建築'], ['items','🎒','物資']
@@ -547,8 +622,6 @@
 
   function facilityResidentsForScene(facilityId) {
     if (facilityId === 'plaza') {
-      // 広場は最大10人まで描画。正式配置された住民を優先し、残り枠に未配置住民を入れる。
-      // 未配置住民が多い場合は、ゲーム内の日付を種にした順序で日ごとに顔ぶれが変わる。
       const maxVisible = 10;
       const explicitlyPlaced = (state.assignments.plaza || []).filter(id => !residentAwayFromBase(id));
       const idle = joinedResidentIds().filter(id => !getResidentFacility(id) && !residentAwayFromBase(id));
@@ -557,7 +630,6 @@
     }
     return (state.assignments[facilityId] || []).filter(id => !residentAwayFromBase(id));
   }
-
   function sceneCharacterHtml(residentId, index, count, facilityId) {
     const resident = RESIDENTS[residentId];
     if (!resident) return '';
@@ -567,14 +639,12 @@
     let statusBadge = '';
     if (residentId === 'lily' && state.tasks.cultivation?.ready) statusBadge = '<span class="character-status-badge task-ready" aria-hidden="true">!</span>';
     if (residentId === 'pochi' && state.tasks.exploration?.ready) statusBadge = '<span class="character-status-badge task-ready task-box" aria-hidden="true">📦</span>';
+    if (residentId === 'bunny' && state.tutorialStep === 'hutProposal') statusBadge = '<span class="character-status-badge task-ready" aria-hidden="true">!</span>';
     return `<button class="scene-character" data-resident="${residentId}" aria-label="${resident.name}" style="--char-left:${pos.left}%;--char-bottom:${pos.bottom}px;--char-width:${displayWidth}px;--char-offset-x:${style.offsetX}px;--char-offset-y:${style.offsetY}px;--notice-y:${style.noticeYOffset || 0}px">
       ${statusBadge}<img src="${resident.image}" alt="${resident.name}">
     </button>`;
   }
-
   function characterPosition(facilityId, index, count) {
-    // bottom は下部メッセージパネルの「安全線」より上に置く。
-    // 人数が増えても前列・中列・後列の順に並べられる。
     const plazaPositions = [
       { left: 24, bottom: 146, width: 102 }, { left: 48, bottom: 140, width: 96 },
       { left: 28, bottom: 226, width: 86 }, { left: 51, bottom: 232, width: 84 },
@@ -585,10 +655,13 @@
     const wellPositions = [
       { left: 72, bottom: 146, width: 112 }, { left: 25, bottom: 150, width: 104 }
     ];
-    const list = facilityId === 'well' ? wellPositions : plazaPositions;
+    const hutPositions = [
+      { left: 71, bottom: 144, width: 104 }, { left: 28, bottom: 148, width: 98 },
+      { left: 52, bottom: 224, width: 90 }, { left: 78, bottom: 232, width: 82 }
+    ];
+    const list = facilityId === 'well' ? wellPositions : facilityId === 'hut' ? hutPositions : plazaPositions;
     return list[index % list.length];
   }
-
   function facilitySceneNote(facilityId) {
     const step = state.tutorialStep;
     if (facilityId === 'plaza') {
@@ -605,37 +678,54 @@
       if (step === 'meetPochi') return '食べものの匂いにつられて、誰かが広場へやって来たようです。❗を確認しましょう。';
       if (step === 'startExploration') return 'ポチが仲間になりました。「行動」から探索をお願いしてみましょう。';
       if (step === 'waitExploration') return `ポチは周辺を探索中。帰還まであと${state.tasks.exploration?.remaining ?? 0}区分です。`;
-      if (step === 'explorationReady') return 'ポチが探索から帰ってきました。📦が出ているポチをタップして報告を受けましょう。';
+      if (step === 'explorationReady') return 'ポチが探索から帰ってきました。印が出ているポチをタップして報告を受けましょう。';
       if (step === 'meetBunny') return 'ポチが探索先で出会った子を連れてきたようです。❗を確認しましょう。';
       if (step === 'assignBunny') return 'バーニィが仲間になりました。「設備情報・配置」から広場に配置してみましょう。';
-      if (step === 'complete') return 'バーニィの「盛り上げ」が発動中。広場から活気 +20。今回の実装範囲はここまでです。';
+      if (step === 'hutProposal') return 'バーニィが何か相談したそうです。印が出ているバーニィをタップしてみましょう。';
+      if (step === 'collectHutMaterials') return `簡素な小屋の材料を集めています。木材 ${state.resources.wood}/20、石材 ${state.resources.stone}/20。`;
+      if (step === 'buildHut') return '小屋の材料が揃いました。「建築」から協力者を3人選びましょう。';
+      if (step === 'waitHutConstruction') return `簡素な小屋を建築中。完成まであと${state.tasks.construction?.remaining ?? 0}区分です。`;
+      if (step === 'meetMakisu') return '完成した小屋の方に、見慣れない魔物娘が来ているようです。';
+      if (step === 'complete') return '簡素な小屋が完成し、マキスも仲間になりました。プロトタイプ版はここまでです。';
       return '拠点の中心になる広場。シャノンはここで様子を見ています。';
+    }
+    if (facilityId === 'hut') {
+      if (step === 'meetMakisu') return '小屋をじっと見つめている魔物娘がいます。❗を確認してみましょう。';
+      if (state.flags.makisuJoined) return 'みんなで建てた簡素な小屋。マキスはもっと立派な設備を作りたそうです。';
+      return 'みんなで建てた簡素な小屋。発展度 +20。';
     }
     if (!state.flags.wellBuilt) return '壊れた井戸。石材5個があれば修復できます。';
     if (step === 'sleepAfterWell') return '井戸が直りました。今夜は休んで、翌朝を迎えましょう。';
-    if (step === 'meetSlamin') return '井戸のそばに見慣れない気配が……。❗をタップしましょう。';
+    if (step === 'meetSlamin') return '井戸のそばに見慣れない気配が……。❗を確認しましょう。';
     if (step === 'assignSlamin') return '「設備情報・配置」からスラミンを井戸に配置してみましょう。';
     if (state.flags.slaminAssignedToWell) return 'スラミンが井戸を浄化中。清潔度 +10。';
     if (state.flags.slaminJoined) return '「設備情報・配置」から住民を配置できます。';
     return '修復された井戸。拠点の水場として使えそうです。';
   }
-
   function baseHtml() {
+    const order = facilityOrder();
     const id = state.currentFacility;
     const facility = FACILITIES[id];
-    const idx = FACILITY_ORDER.indexOf(id);
+    const idx = order.indexOf(id);
     const isWell = id === 'well';
+    const isHut = id === 'hut';
     const residents = facilityResidentsForScene(id);
     const slaminEvent = isWell && state.flags.slaminEventReady && !state.flags.slaminJoined;
     const lilyEvent = id === 'plaza' && state.flags.lilyEventReady && !state.flags.lilyJoined;
     const pochiEvent = id === 'plaza' && state.flags.pochiEventReady && !state.flags.pochiJoined;
     const bunnyEvent = id === 'plaza' && state.flags.bunnyEventReady && !state.flags.bunnyJoined;
+    const makisuEvent = isHut && state.flags.makisuEventReady && !state.flags.makisuJoined;
 
-    const mainObject = isWell
-      ? `<button class="facility-object well-focus ${state.flags.wellBuilt ? '' : 'broken'}" id="facility-object" aria-label="${facilityName('well')}">
+    let mainObject = '';
+    if (isWell) {
+      mainObject = `<button class="facility-object well-focus ${state.flags.wellBuilt ? '' : 'broken'}" id="facility-object" aria-label="${facilityName('well')}">
           <img src="images/well.webp" alt="${facilityName('well')}">
-        </button>`
-      : '';
+        </button>`;
+    } else if (isHut) {
+      mainObject = `<button class="facility-object hut-focus" id="facility-object" aria-label="簡素な小屋">
+          <img src="images/hut.webp" alt="簡素な小屋">
+        </button>`;
+    }
 
     const characters = residents.map((residentId, i) => sceneCharacterHtml(residentId, i, residents.length, id)).join('');
     const shannonStyle = SCENE_CHARACTER_STYLE.shannon;
@@ -649,14 +739,14 @@
       <div class="facility-scene time-${state.timeIndex}" id="facility-scene" data-facility="${id}">
         <div class="facility-scene-head">
           <div>
-            <div class="facility-counter">${idx + 1} / ${FACILITY_ORDER.length}</div>
+            <div class="facility-counter">${idx + 1} / ${order.length}</div>
             <strong>${facilityName(id)}</strong>
           </div>
           <button class="scene-list-btn" id="facility-list-btn">設備一覧</button>
         </div>
 
         <button class="scene-arrow scene-arrow-left" id="facility-prev" ${idx === 0 ? 'disabled' : ''} aria-label="前の設備">‹</button>
-        <button class="scene-arrow scene-arrow-right" id="facility-next" ${idx === FACILITY_ORDER.length - 1 ? 'disabled' : ''} aria-label="次の設備">›</button>
+        <button class="scene-arrow scene-arrow-right" id="facility-next" ${idx === order.length - 1 ? 'disabled' : ''} aria-label="次の設備">›</button>
 
         ${mainObject}
         ${shannon}
@@ -665,15 +755,15 @@
         ${lilyEvent ? '<button class="event-pin event-center" id="lily-event" aria-label="リリー来訪イベント">!</button>' : ''}
         ${pochiEvent ? '<button class="event-pin event-center" id="pochi-event" aria-label="ポチ来訪イベント">!</button>' : ''}
         ${bunnyEvent ? '<button class="event-pin event-center" id="bunny-event" aria-label="バーニィ来訪イベント">!</button>' : ''}
+        ${makisuEvent ? '<button class="event-pin event-center" id="makisu-event" aria-label="マキス来訪イベント">!</button>' : ''}
 
         <div class="scene-bottom-panel">
-          <div class="facility-dots">${FACILITY_ORDER.map((fid, i) => `<i class="${i === idx ? 'active' : ''}"></i>`).join('')}</div>
+          <div class="facility-dots">${order.map((fid, i) => `<i class="${i === idx ? 'active' : ''}"></i>`).join('')}</div>
           <p>${facilitySceneNote(id)}</p>
           <button class="scene-detail-btn" id="facility-detail-btn">設備情報・配置</button>
         </div>
       </div>`;
   }
-
   function friendsHtml() {
     const residentStatus = id => {
       if (id === 'lily' && state.tasks.cultivation) {
@@ -684,6 +774,14 @@
       const place = getResidentFacility(id);
       return place ? `${facilityName(place)}に配置中` : '拠点で待機中';
     };
+    const card = id => {
+      const r = RESIDENTS[id];
+      return `<div class="resident-list-card static-card">
+        <img src="${r.image}" alt="${r.name}">
+        <div><div class="card-head"><span class="card-title">${r.name}</span><span class="badge">${r.lineage}</span></div>
+        <p class="card-desc">${r.species}<br>得意：${r.ability}<br>状態：${residentStatus(id)}</p></div>
+      </div>`;
+    };
     return `<section class="page">
       <h2 class="page-title">仲間</h2>
       <p class="page-lead">拠点にいる魔物娘と、現在の役割を確認できます。</p>
@@ -693,31 +791,15 @@
           <div><div class="card-head"><span class="card-title">シャノン</span><span class="badge">ストーリー</span></div>
           <p class="card-desc">羊娘 / 獣<br>得意：相談<br>状態：寂れた広場</p></div>
         </div>
-        ${state.flags.slaminJoined ? `<div class="resident-list-card static-card">
-          <img src="images/slamin.webp" alt="スラミン">
-          <div><div class="card-head"><span class="card-title">スラミン</span><span class="badge">スライム</span></div>
-          <p class="card-desc">スライム娘<br>得意：浄化<br>状態：${residentStatus('slamin')}</p></div>
-        </div>` : ''}
-        ${state.flags.lilyJoined ? `<div class="resident-list-card static-card">
-          <img src="images/lily.webp" alt="リリー">
-          <div><div class="card-head"><span class="card-title">リリー</span><span class="badge">自然</span></div>
-          <p class="card-desc">アルラウネ<br>得意：栽培<br>状態：${residentStatus('lily')}</p></div>
-        </div>` : ''}
-        ${state.flags.pochiJoined ? `<div class="resident-list-card static-card">
-          <img src="images/pochi.webp" alt="ポチ">
-          <div><div class="card-head"><span class="card-title">ポチ</span><span class="badge">獣</span></div>
-          <p class="card-desc">犬娘<br>得意：探索<br>状態：${residentStatus('pochi')}</p></div>
-        </div>` : ''}
-        ${state.flags.bunnyJoined ? `<div class="resident-list-card static-card">
-          <img src="images/bunny.webp" alt="バーニィ">
-          <div><div class="card-head"><span class="card-title">バーニィ</span><span class="badge">獣</span></div>
-          <p class="card-desc">ウサギ娘<br>得意：盛り上げ<br>状態：${residentStatus('bunny')}</p></div>
-        </div>` : ''}
-        ${!state.flags.slaminJoined && !state.flags.lilyJoined && !state.flags.pochiJoined && !state.flags.bunnyJoined ? '<div class="empty-state">まだ通常の魔物娘はいません。</div>' : ''}
+        ${state.flags.slaminJoined ? card('slamin') : ''}
+        ${state.flags.lilyJoined ? card('lily') : ''}
+        ${state.flags.pochiJoined ? card('pochi') : ''}
+        ${state.flags.bunnyJoined ? card('bunny') : ''}
+        ${state.flags.makisuJoined ? card('makisu') : ''}
+        ${joinedResidentIds().length === 0 ? '<div class="empty-state">まだ通常の魔物娘はいません。</div>' : ''}
       </div>
     </section>`;
   }
-
   function actionsHtml() {
     const step = state.tutorialStep;
     let body = '';
@@ -757,34 +839,76 @@
       body = `<div class="tutorial-lock"><strong>ポチが誰かを連れてきたようです</strong><p>探索先で出会った魔物娘が広場に来ています。必須イベントを確認しましょう。</p><button class="primary-btn" id="go-bunny-event">広場へ行く</button></div>`;
     } else if (step === 'assignBunny') {
       body = `<div class="tutorial-lock tutorial-focus"><strong>バーニィを広場に配置しよう</strong><p>広場は最大10人まで配置できます。「盛り上げ」を持つ住民が1人以上いれば、活気が+20されます。効果は重複しません。</p><button class="primary-btn" id="go-plaza-assign">広場の配置を開く</button></div>`;
+    } else if (step === 'hutProposal') {
+      body = `<div class="tutorial-lock"><strong>バーニィが相談したそうです</strong><p>広場で印が出ているバーニィをタップして、話を聞いてみましょう。</p><button class="primary-btn" id="go-bunny-proposal">バーニィのところへ</button></div>`;
+    } else if (step === 'collectHutMaterials') {
+      const woodDone = state.resources.wood >= 20;
+      const stoneDone = state.resources.stone >= 20;
+      body = `<div class="tutorial-lock tutorial-focus"><strong>簡素な小屋の材料を集めよう</strong><p>必要：木材20・石材20。現在は木材${state.resources.wood}、石材${state.resources.stone}です。必要量に達した資材は、それ以上集めなくても大丈夫です。</p></div>
+        <div class="card-stack">
+          <button class="action-card ${!woodDone ? 'action-highlight' : ''}" id="hut-gather-wood" ${woodDone ? 'disabled' : ''}><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。</p></button>
+          <button class="action-card ${!stoneDone ? 'action-highlight' : ''}" id="hut-gather-stone" ${stoneDone ? 'disabled' : ''}><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。</p></button>
+        </div>`;
+    } else if (step === 'buildHut') {
+      body = `<div class="tutorial-lock"><strong>材料が揃いました</strong><p>時間を進める前に、「建築」から簡素な小屋の建築を始めましょう。</p><button class="primary-btn" id="go-build-hut">建築を開く</button></div>`;
+    } else if (step === 'waitHutConstruction') {
+      const remaining = state.tasks.construction?.remaining ?? 0;
+      body = `<div class="tutorial-lock tutorial-focus"><strong>簡素な小屋を建築中</strong><p>完成まであと${remaining}区分。協力者は建築を手伝っていますが、設備の配置効果はそのまま維持されます。</p></div>
+        <div class="card-stack">
+          <button class="action-card" id="hut-build-gather-wood"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。建築も1区分進みます。</p></button>
+          <button class="action-card" id="hut-build-gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。建築も1区分進みます。</p></button>
+          <button class="action-card" id="hut-build-rest"><div class="card-head"><span class="card-title">☕ 休む</span><span class="card-time">1区分</span></div><p class="card-desc">何も得ずに1区分進めます。</p></button>
+        </div>`;
+    } else if (step === 'meetMakisu') {
+      body = `<div class="tutorial-lock"><strong>完成した小屋に来訪者</strong><p>簡素な小屋の近くに、見慣れない魔物娘が来ています。小屋の❗を確認しましょう。</p><button class="primary-btn" id="go-makisu-event">簡素な小屋へ</button></div>`;
     } else if (step === 'complete') {
-      body = `<div class="tutorial-lock complete-card"><strong>バーニィの配置まで実装完了</strong><p>広場に「盛り上げ」が発動し、活気が+20されました。今回の実装範囲はここまでです。次は簡素な小屋の建築へ進めます。</p></div>`;
+      body = `<div class="tutorial-lock complete-card"><strong>プロトタイプ版 完了</strong><p>簡素な小屋が完成し、マキスが仲間になりました。拠点づくり・配置・栽培・探索・複数人建築まで、基本ループを一通り遊べます。</p></div>`;
     } else {
       body = `<div class="card-stack"><button class="action-card" id="gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。</p></button><button class="action-card" id="gather-wood"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。</p></button></div>`;
     }
 
     return `<section class="page"><h2 class="page-title">行動</h2><p class="page-lead">チュートリアル中は、次に必要な行動だけが解放されます。</p>${body}</section>`;
   }
-
   function buildHtml() {
     const enoughStone = state.resources.stone >= 5;
-    if (state.flags.wellBuilt) {
-      return `<section class="page"><h2 class="page-title">建築</h2><p class="page-lead">設備の建築・修復を行います。</p>
-        <button class="action-card" id="jump-well"><div class="card-head"><span class="card-title">井戸</span><span class="badge">完成</span></div><p class="card-desc">発展度 +10 / 配置上限 1人 / タグ：水場<br>タップして井戸の画面へ移動。</p></button>
-        <div class="empty-state" style="margin-top:10px">この実装範囲では、ほかの設備はまだ建てられません。</div></section>`;
+
+    if (!state.flags.wellBuilt) {
+      return `<section class="page">
+        <h2 class="page-title">建築</h2>
+        <p class="page-lead">資材と協力者を使って、設備を修復・建築します。</p>
+        <button class="action-card" id="repair-well" ${enoughStone && !state.flags.wellBuildStarted ? '' : 'disabled'}>
+          <div class="card-head"><span class="card-title">壊れた井戸を修復</span><span class="card-time">2区分</span></div>
+          <p class="card-desc">石材 5（所持 ${state.resources.stone}）<br>必要人員：魔物娘×1 → 今回はシャノンが協力<br>完成時：発展度 +10</p>
+          <div class="progress"><i style="width:${enoughStone ? 100 : Math.min(100, state.resources.stone / 5 * 100)}%"></i></div>
+        </button>
+        ${!enoughStone ? '<p class="page-lead" style="margin-top:10px">石材が足りません。「行動」から石材を集めましょう。</p>' : '<p class="ready-note">✓ 資材が揃っています。修復を開始できます。</p>'}
+      </section>`;
     }
+
+    const hutReady = state.resources.wood >= 20 && state.resources.stone >= 20;
+    const construction = state.tasks.construction;
+
     return `<section class="page">
       <h2 class="page-title">建築</h2>
-      <p class="page-lead">資材と協力者を使って、設備を修復・建築します。</p>
-      <button class="action-card" id="repair-well" ${enoughStone && !state.flags.wellBuildStarted ? '' : 'disabled'}>
-        <div class="card-head"><span class="card-title">壊れた井戸を修復</span><span class="card-time">2区分</span></div>
-        <p class="card-desc">石材 5（所持 ${state.resources.stone}）<br>必要人員：魔物娘×1 → 今回はシャノンが協力<br>完成時：発展度 +10</p>
-        <div class="progress"><i style="width:${enoughStone ? 100 : Math.min(100, state.resources.stone / 5 * 100)}%"></i></div>
+      <p class="page-lead">設備の建築・修復を行います。</p>
+
+      <button class="action-card" id="jump-well">
+        <div class="card-head"><span class="card-title">井戸</span><span class="badge">完成</span></div>
+        <p class="card-desc">発展度 +10 / 配置上限 1人 / タグ：水場<br>タップして井戸の画面へ移動。</p>
       </button>
-      ${!enoughStone ? '<p class="page-lead" style="margin-top:10px">石材が足りません。「行動」から石材を集めましょう。</p>' : '<p class="ready-note">✓ 資材が揃っています。修復を開始できます。</p>'}
+
+      ${state.flags.hutUnlocked || state.flags.hutBuilt || construction ? `
+        <div style="height:10px"></div>
+        <button class="action-card ${state.tutorialStep === 'buildHut' ? 'action-highlight' : ''}" id="${state.flags.hutBuilt ? 'jump-hut' : 'open-hut-builders'}" ${(!state.flags.hutBuilt && (!hutReady || construction)) ? 'disabled' : ''}>
+          <div class="card-head"><span class="card-title">簡素な小屋</span>${state.flags.hutBuilt ? '<span class="badge">完成</span>' : construction ? `<span class="badge">建築中 ${construction.remaining}区分</span>` : '<span class="card-time">4区分</span>'}</div>
+          <p class="card-desc">木材 20（所持 ${state.resources.wood}） / 石材 20（所持 ${state.resources.stone}）<br>必要人員：魔物娘×3<br>完成時：発展度 +20 / 配置上限 4人 / タグ：住居・物置</p>
+          ${!state.flags.hutBuilt ? `<div class="progress"><i style="width:${Math.min(100, Math.min(state.resources.wood / 20, state.resources.stone / 20) * 100)}%"></i></div>` : ''}
+        </button>
+        ${!state.flags.hutBuilt && !construction && hutReady ? '<p class="ready-note">✓ 資材が揃っています。協力者を3人選んで建築できます。</p>' : ''}
+        ${construction ? `<p class="ready-note">🔨 建築中。完成まであと${construction.remaining}区分です。</p>` : ''}
+      ` : '<div class="empty-state" style="margin-top:10px">人数が増えると、新しい設備を建てられるようになります。</div>'}
     </section>`;
   }
-
   function itemsHtml() {
     const matariKnown = state.flags.matariReceived || state.flags.cultivationStarted || state.flags.cultivationHarvested;
     return `<section class="page">
@@ -796,13 +920,15 @@
   }
 
   function facilityListOverlay() {
+    const order = facilityOrder();
     return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet tall-sheet" role="dialog" aria-modal="true">
       <div class="sheet-handle"></div><h2>設備一覧</h2><p>行きたい場所を選んでください。普段は拠点画面を左右にスワイプしても移動できます。</p>
       <div class="facility-list">
-        ${FACILITY_ORDER.map(id => {
+        ${order.map(id => {
           const assigned = (state.assignments[id] || []).length;
           const event = (id === 'well' && state.flags.slaminEventReady && !state.flags.slaminJoined) ||
-            (id === 'plaza' && ((state.flags.lilyEventReady && !state.flags.lilyJoined) || (state.flags.pochiEventReady && !state.flags.pochiJoined) || (state.flags.bunnyEventReady && !state.flags.bunnyJoined) || ['startCultivation', 'harvestCultivation', 'explorationReady', 'assignBunny'].includes(state.tutorialStep)));
+            (id === 'plaza' && ((state.flags.lilyEventReady && !state.flags.lilyJoined) || (state.flags.pochiEventReady && !state.flags.pochiJoined) || (state.flags.bunnyEventReady && !state.flags.bunnyJoined) || ['startCultivation', 'harvestCultivation', 'explorationReady', 'assignBunny', 'hutProposal'].includes(state.tutorialStep))) ||
+            (id === 'hut' && state.flags.makisuEventReady && !state.flags.makisuJoined);
           return `<button class="facility-list-card" data-jump-facility="${id}">
             <div><strong>${facilityName(id)}</strong>${event ? '<span class="event-mini">!</span>' : ''}<small>${id === 'well' && !state.flags.wellBuilt ? '修復が必要' : `配置 ${assigned} / ${FACILITIES[id].capacity}`}</small></div>
             <span>›</span>
@@ -812,7 +938,6 @@
       <div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div>
     </section></div>`;
   }
-
   function facilityOverlay(facilityId) {
     const facility = FACILITIES[facilityId];
     const usable = isFacilityUsable(facilityId);
@@ -870,6 +995,36 @@
     </section></div>`;
   }
 
+  function builderSelectOverlay() {
+    const selected = Array.isArray(overlay?.selected) ? overlay.selected : [];
+    const candidates = joinedResidentIds().filter(id => !residentAwayFromBase(id));
+    return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet tall-sheet" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div><h2>建築を手伝う住民</h2>
+      <p>簡素な小屋には3人の協力が必要です。設備に配置中の住民を選んでも、配置効果は維持されます。</p>
+      <div class="resident-select-list">
+        ${candidates.map(id => {
+          const r = RESIDENTS[id];
+          const chosen = selected.includes(id);
+          const busy = !!residentBusyText(id);
+          return `<button class="resident-select-card ${chosen ? 'selected' : ''}" data-toggle-builder="${id}" ${busy && !chosen ? 'disabled' : ''}>
+            <img src="${r.image}" alt="${r.name}">
+            <div class="resident-card-body">
+              <div class="resident-card-title"><strong>${r.name}</strong><span class="badge">${r.species}</span></div>
+              <p>得意：${r.ability}</p>
+              <small>${busy ? residentBusyText(id) : getResidentFacility(id) ? `現在：${facilityName(getResidentFacility(id))}に配置中` : '現在：待機中'}</small>
+              <em class="${chosen ? 'effect-good' : 'effect-none'}">${chosen ? '✓ 建築に参加' : 'タップして選択'}</em>
+            </div>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="effect-box" style="margin-top:12px"><strong>選択 ${selected.length} / 3人</strong><p>必要資材：木材20・石材20</p></div>
+      <div class="sheet-actions">
+        <button class="primary-btn" id="start-hut-construction" ${selected.length === 3 && state.resources.wood >= 20 && state.resources.stone >= 20 ? '' : 'disabled'}>この3人で建築開始</button>
+        <button class="secondary-btn" id="close-sheet">閉じる</button>
+      </div>
+    </section></div>`;
+  }
+
   function cultivationOverlay() {
     return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true">
       <div class="sheet-handle"></div><h2>リリーに栽培をお願いする</h2>
@@ -911,6 +1066,7 @@
     if (overlay.type === 'facilityList') return facilityListOverlay();
     if (overlay.type === 'facility') return facilityOverlay(overlay.facilityId);
     if (overlay.type === 'residentSelect') return residentSelectOverlay(overlay.facilityId);
+    if (overlay.type === 'builderSelect') return builderSelectOverlay();
     if (overlay.type === 'cultivation') return cultivationOverlay();
     if (overlay.type === 'exploration') return explorationOverlay();
     if (overlay.type === 'shannon') {
@@ -938,22 +1094,24 @@
           extra = `<div class="effect-box"><strong>🐾 探索中</strong><p>帰還まであと${explorationTask.remaining}区分です。</p></div>`;
         }
       }
+      if (r.id === 'bunny' && state.tutorialStep === 'hutProposal') {
+        extra = `<div class="effect-box"><strong>💬 相談があるようです</strong><p>人数が増えた拠点について、バーニィに考えがあるようです。</p></div><button class="primary-btn" id="hear-hut-proposal">話を聞く</button>`;
+      }
       const stateText = task ? (task.ready ? '栽培完了' : '栽培中') : explorationTask ? (explorationTask.ready ? '探索から帰還' : `探索中・あと${explorationTask.remaining}区分`) : (place ? facilityName(place) + 'に配置中' : '拠点で待機中');
       return `<div class="sheet-backdrop" id="sheet-backdrop"><section class="sheet" role="dialog" aria-modal="true"><div class="sheet-handle"></div><h2>${r.name}</h2><p>${r.species} / ${r.lineage}<br>得意：${r.ability}<br>状態：${stateText}</p>${extra}<div class="sheet-actions"><button class="secondary-btn" id="close-sheet">閉じる</button></div></section></div>`;
     }
     return '';
   }
-
   function switchFacility(delta) {
-    const idx = FACILITY_ORDER.indexOf(state.currentFacility);
+    const order = facilityOrder();
+    const idx = order.indexOf(state.currentFacility);
     const next = idx + delta;
-    if (next < 0 || next >= FACILITY_ORDER.length) return;
-    state.currentFacility = FACILITY_ORDER[next];
+    if (next < 0 || next >= order.length) return;
+    state.currentFacility = order[next];
     overlay = null;
     save(true);
     renderGame();
   }
-
   function bindSwipe() {
     const scene = document.getElementById('facility-scene');
     if (!scene) return;
@@ -1130,6 +1288,29 @@
       renderGame();
     });
 
+    document.getElementById('go-bunny-proposal')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'plaza';
+      overlay = { type:'resident', residentId:'bunny' };
+      save(true);
+      renderGame();
+    });
+
+    document.getElementById('go-build-hut')?.addEventListener('click', () => {
+      state.currentTab = 'build';
+      overlay = null;
+      save(true);
+      renderGame();
+    });
+
+    document.getElementById('go-makisu-event')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'hut';
+      overlay = null;
+      save(true);
+      renderGame();
+    });
+
     document.getElementById('repair-well')?.addEventListener('click', () => {
       if (state.resources.stone < 5 || state.flags.wellBuildStarted) return;
       state.resources.stone -= 5;
@@ -1217,6 +1398,76 @@
       });
     });
 
+    document.getElementById('makisu-event')?.addEventListener('click', () => {
+      playDialogue(MAKISU_EVENT, () => {
+        state.flags.makisuEventReady = false;
+        state.flags.makisuJoined = true;
+        state.flags.sliceComplete = true;
+        setTutorialStep('complete');
+        recalculateStats();
+        save(true);
+        state.currentTab = 'base';
+        state.currentFacility = 'hut';
+        renderGame();
+        toast('マキスが仲間になりました！ プロトタイプ版はここまでです');
+      });
+    });
+
+    document.getElementById('hear-hut-proposal')?.addEventListener('click', () => {
+      if (state.tutorialStep !== 'hutProposal') return;
+      overlay = null;
+      playDialogue(HUT_PROPOSAL_EVENT, () => {
+        state.flags.hutProposalSeen = true;
+        state.flags.hutUnlocked = true;
+        setTutorialStep(state.resources.wood >= 20 && state.resources.stone >= 20 ? 'buildHut' : 'collectHutMaterials');
+        state.currentTab = 'actions';
+        state.currentFacility = 'plaza';
+        save(true);
+        renderGame();
+        toast('簡素な小屋が建築可能になりました');
+      });
+    });
+
+    document.getElementById('open-hut-builders')?.addEventListener('click', () => {
+      if (!state.flags.hutUnlocked || state.flags.hutBuilt || state.tasks.construction) return;
+      overlay = { type:'builderSelect', selected:[] };
+      renderGame();
+    });
+
+    document.querySelectorAll('[data-toggle-builder]').forEach(btn => btn.addEventListener('click', () => {
+      const residentId = btn.dataset.toggleBuilder;
+      const selected = Array.isArray(overlay.selected) ? [...overlay.selected] : [];
+      const idx = selected.indexOf(residentId);
+      if (idx >= 0) selected.splice(idx, 1);
+      else if (selected.length < 3) selected.push(residentId);
+      else {
+        toast('建築に参加する住民は3人まで選べます');
+        return;
+      }
+      overlay = { type:'builderSelect', selected };
+      renderGame();
+    }));
+
+    document.getElementById('start-hut-construction')?.addEventListener('click', () => {
+      const selected = Array.isArray(overlay?.selected) ? overlay.selected : [];
+      if (selected.length !== 3 || state.resources.wood < 20 || state.resources.stone < 20 || state.tasks.construction) return;
+      state.resources.wood -= 20;
+      state.resources.stone -= 20;
+      state.flags.hutBuildStarted = true;
+      state.tasks.construction = {
+        facilityId: 'hut',
+        residentIds: [...selected],
+        remaining: 4,
+        ready: false
+      };
+      setTutorialStep('waitHutConstruction');
+      overlay = null;
+      state.currentTab = 'actions';
+      save(true);
+      renderGame();
+      toast(`${selected.map(id => RESIDENTS[id].name).join('・')}が小屋の建築を開始しました`);
+    });
+
     document.getElementById('open-resident-select')?.addEventListener('click', () => {
       overlay = { type:'residentSelect', facilityId: overlay.facilityId };
       renderGame();
@@ -1249,7 +1500,7 @@
         toast('チュートリアル中はスラミンを井戸に配置したまま進めましょう');
         return;
       }
-      if (residentId === 'bunny' && state.tutorialStep === 'assignBunny') {
+      if (residentId === 'bunny' && ['assignBunny', 'hutProposal'].includes(state.tutorialStep)) {
         toast('まずはバーニィを広場に配置した状態で効果を確認しましょう');
         return;
       }
@@ -1285,7 +1536,7 @@
     document.querySelectorAll('[data-start-explorer]').forEach(btn => btn.addEventListener('click', () => {
       const residentId = btn.dataset.startExplorer;
       if (state.tasks.exploration || RESIDENTS[residentId]?.ability !== '探索') return;
-      FACILITY_ORDER.forEach(id => { state.assignments[id] = (state.assignments[id] || []).filter(x => x !== residentId); });
+      facilityOrder().forEach(id => { state.assignments[id] = (state.assignments[id] || []).filter(x => x !== residentId); });
       state.tasks.exploration = { residentId, remaining: 2, ready: false, reward: null };
       state.flags.explorationStarted = true;
       state.flags.explorationReady = false;
@@ -1332,6 +1583,61 @@
       save(true);
       renderGame();
       toast(state.flags.pochiEventReady ? 'マタリの実 ×5。広場に誰か来たようです！' : 'マタリの実 ×5を受け取りました！');
+    });
+
+    const updateHutMaterialStep = () => {
+      if (state.resources.wood >= 20 && state.resources.stone >= 20) {
+        setTutorialStep('buildHut');
+        state.currentTab = 'build';
+        toast('小屋の材料が揃いました。建築する住民を選びましょう');
+      }
+    };
+
+    document.getElementById('hut-gather-wood')?.addEventListener('click', () => {
+      if (state.tutorialStep !== 'collectHutMaterials' || state.resources.wood >= 20) return;
+      state.resources.wood += 5;
+      advanceTime(1);
+      updateHutMaterialStep();
+      save(true);
+      renderGame();
+      if (state.tutorialStep === 'collectHutMaterials') toast('木材 +5');
+    });
+
+    document.getElementById('hut-gather-stone')?.addEventListener('click', () => {
+      if (state.tutorialStep !== 'collectHutMaterials' || state.resources.stone >= 20) return;
+      state.resources.stone += 5;
+      advanceTime(1);
+      updateHutMaterialStep();
+      save(true);
+      renderGame();
+      if (state.tutorialStep === 'collectHutMaterials') toast('石材 +5');
+    });
+
+    const advanceHutConstruction = (kind) => {
+      if (state.tutorialStep !== 'waitHutConstruction' || !state.tasks.construction) return;
+      if (kind === 'wood') state.resources.wood += 5;
+      if (kind === 'stone') state.resources.stone += 5;
+      advanceTime(1);
+      if (state.tutorialStep === 'meetMakisu') {
+        state.currentTab = 'base';
+        state.currentFacility = 'hut';
+        toast('簡素な小屋が完成しました！ 発展度 +20');
+      } else if (kind === 'wood') toast('木材 +5。小屋の建築も進みました');
+      else if (kind === 'stone') toast('石材 +5。小屋の建築も進みました');
+      else toast(`${currentTimeName()}になりました。小屋の建築も進みました`);
+      renderGame();
+    };
+    document.getElementById('hut-build-gather-wood')?.addEventListener('click', () => advanceHutConstruction('wood'));
+    document.getElementById('hut-build-gather-stone')?.addEventListener('click', () => advanceHutConstruction('stone'));
+    document.getElementById('hut-build-rest')?.addEventListener('click', () => advanceHutConstruction('rest'));
+
+    document.getElementById('jump-hut')?.addEventListener('click', () => {
+      if (!state.flags.hutBuilt) return;
+      state.currentTab = 'base';
+      state.currentFacility = 'hut';
+      overlay = null;
+      save(true);
+      renderGame();
     });
 
     const advanceExplorationWait = (kind) => {
