@@ -60,14 +60,14 @@
   // 拠点画面での見た目補正。画像素材ごとの差をここだけで吸収する。
   // scale はキャラクターの見た目サイズ、offsetX / offsetY は足元基準の微調整。
   const SCENE_CHARACTER_STYLE = {
-    shannon: { scale: 1.00, offsetX: 0, offsetY: 0 },
-    slamin:  { scale: 1.08, offsetX: 0, offsetY: 0 },
-    lily:    { scale: 1.24, offsetX: 0, offsetY: 2 },
-    pochi:    { scale: 1.70, offsetX: 0, offsetY: 0 }
+    shannon: { scale: 1.00, offsetX: 0, offsetY: 0, noticeX: 0, noticeY: -28 },
+    slamin:  { scale: 1.08, offsetX: 0, offsetY: 0, noticeX: 2, noticeY: -30 },
+    lily:    { scale: 1.24, offsetX: 0, offsetY: 2, noticeX: 4, noticeY: -34 },
+    pochi:   { scale: 1.70, offsetX: 0, offsetY: 0, noticeX: 22, noticeY: -44 }
   };
 
   const defaultState = () => ({
-    version: 6,
+    version: 7,
     started: false,
     tutorialStep: 'collectStone',
     currentTab: 'base',
@@ -171,7 +171,7 @@
       if (parsed.flags?.slaminAssignedToWell && !state.assignments.well.includes('slamin')) {
         state.assignments.well = ['slamin'];
       }
-      state.version = 6;
+      state.version = 7;
       recalculateStats();
       if (!parsed.tutorialStep) state.tutorialStep = deriveTutorialStep();
       if ((parsed.version || 0) < 4 && state.flags.slaminAssignedToWell && !state.flags.lilyJoined) {
@@ -512,11 +512,11 @@
     const resident = RESIDENTS[residentId];
     if (!resident) return '';
     const pos = characterPosition(facilityId, index, count);
-    const style = SCENE_CHARACTER_STYLE[residentId] || { scale: 1, offsetX: 0, offsetY: 0 };
+    const style = SCENE_CHARACTER_STYLE[residentId] || { scale: 1, offsetX: 0, offsetY: 0, noticeX: 0, noticeY: -28 };
     let statusBadge = '';
     if (residentId === 'lily' && state.tasks.cultivation?.ready) statusBadge = '<span class="character-status-badge task-ready" aria-hidden="true">!</span>';
     if (residentId === 'pochi' && state.tasks.exploration?.ready) statusBadge = '<span class="character-status-badge task-ready task-box" aria-hidden="true">📦</span>';
-    return `<button class="scene-character" data-resident="${residentId}" aria-label="${resident.name}" style="--char-left:${pos.left}%;--char-bottom:${pos.bottom}px;--char-width:${pos.width}px;--char-scale:${style.scale};--char-offset-x:${style.offsetX}px;--char-offset-y:${style.offsetY}px">
+    return `<button class="scene-character" data-resident="${residentId}" aria-label="${resident.name}" style="--char-left:${pos.left}%;--char-bottom:${pos.bottom}px;--char-width:${pos.width}px;--char-scale:${style.scale};--char-offset-x:${style.offsetX}px;--char-offset-y:${style.offsetY}px;--notice-x:${style.noticeX || 0}px;--notice-y:${style.noticeY ?? -28}px">
       ${statusBadge}<img src="${resident.image}" alt="${resident.name}">
     </button>`;
   }
