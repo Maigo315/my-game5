@@ -72,8 +72,8 @@ button:focus-visible { outline:3px solid rgba(217,180,110,.5); outline-offset:2p
 .well-focus { width:clamp(230px, 66vw, 285px); height:clamp(230px, 66vw, 285px); bottom:104px; }
 .well-focus.broken img { filter:grayscale(.75) brightness(.55) drop-shadow(0 14px 12px rgba(0,0,0,.55)); transform:rotate(-2deg); opacity:.82; }
 .well-focus.broken::after { content:""; position:absolute; left:18%; right:13%; top:55%; height:8px; background:#6a5543; transform:rotate(-18deg); border-radius:4px; box-shadow:0 0 0 2px rgba(20,18,16,.25); pointer-events:none; }
-.scene-character { --char-left:50%; --char-bottom:146px; --char-width:100px; --char-scale:1; --char-offset-x:0px; --char-offset-y:0px; position:absolute; z-index:7; left:calc(var(--char-left) + var(--char-offset-x)); bottom:calc(var(--char-bottom) + var(--char-offset-y)); transform:translateX(-50%); transform-origin:bottom center; width:var(--char-width); height:auto; background:transparent; padding:0; }
-.scene-character img { display:block; width:100%; height:auto; max-height:220px; object-fit:contain; transform:scale(var(--char-scale)); transform-origin:bottom center; filter:drop-shadow(0 10px 9px rgba(0,0,0,.45)); }
+.scene-character { --char-left:50%; --char-bottom:146px; --char-width:100px; --char-offset-x:0px; --char-offset-y:0px; position:absolute; z-index:7; left:calc(var(--char-left) + var(--char-offset-x)); bottom:calc(var(--char-bottom) + var(--char-offset-y)); transform:translateX(-50%); transform-origin:bottom center; width:var(--char-width); height:auto; background:transparent; padding:0; }
+.scene-character img { display:block; width:100%; height:auto; max-height:220px; object-fit:contain; filter:drop-shadow(0 10px 9px rgba(0,0,0,.45)); }
 .scene-character:focus-visible { outline:none; }
 .scene-character:focus-visible img { filter:drop-shadow(0 0 8px rgba(217,180,110,.8)) drop-shadow(0 10px 9px rgba(0,0,0,.45)); }
 .shannon-scene { z-index:6; }
@@ -195,15 +195,14 @@ button:focus-visible { outline:3px solid rgba(217,180,110,.5); outline-offset:2p
 .dialogue-char.lily { height:min(64vh, 570px); }
 
 
-/* v0.6: task completion badges for character-based work. */
+/* v0.8: character task notices are always centered directly above the character.
+   Individual art can still adjust only the vertical gap with --notice-y. */
 .character-status-badge {
-  /* v0.7: character art can be individually scaled, so notices live outside
-     the unscaled art box and receive per-character offsets. */
   position:absolute;
   z-index:20;
-  left:100%;
+  left:50%;
   top:0;
-  transform:translate(var(--notice-x, 0px), var(--notice-y, -28px));
+  transform:translate(-50%, calc(-100% - 8px + var(--notice-y, 0px)));
   min-width:30px;
   height:30px;
   padding:0 6px;
