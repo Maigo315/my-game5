@@ -221,3 +221,6 @@ button:focus-visible { outline:3px solid rgba(217,180,110,.5); outline-offset:2p
 }
 .character-status-badge.task-box { font-size:14px; }
 .dialogue-char.pochi { height:min(75vh, 680px); }
+
+/* v0.9: Bunny joins after the first exploration. */
+.dialogue-char.bunny { height:min(67vh, 610px); }

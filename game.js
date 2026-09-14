@@ -54,6 +54,14 @@
       lineage: '獣',
       ability: '探索',
       image: 'images/pochi.webp'
+    },
+    bunny: {
+      id: 'bunny',
+      name: 'バーニィ',
+      species: 'ウサギ娘',
+      lineage: '獣',
+      ability: '盛り上げ',
+      image: 'images/bunny.webp'
     }
   };
 
@@ -63,11 +71,12 @@
     shannon: { scale: 1.00, offsetX: 0, offsetY: 0, noticeYOffset: 0 },
     slamin:  { scale: 1.08, offsetX: 0, offsetY: 0, noticeYOffset: 0 },
     lily:    { scale: 1.24, offsetX: 0, offsetY: 2, noticeYOffset: 0 },
-    pochi:   { scale: 1.70, offsetX: 0, offsetY: 0, noticeYOffset: 0 }
+    pochi:   { scale: 1.70, offsetX: 0, offsetY: 0, noticeYOffset: 0 },
+    bunny:   { scale: 1.10, offsetX: 0, offsetY: 0, noticeYOffset: 0 }
   };
 
   const defaultState = () => ({
-    version: 8,
+    version: 9,
     started: false,
     tutorialStep: 'collectStone',
     currentTab: 'base',
@@ -98,6 +107,9 @@
       explorationStarted: false,
       explorationReady: false,
       explorationClaimed: false,
+      bunnyEventReady: false,
+      bunnyJoined: false,
+      bunnyAssignedToPlaza: false,
       sliceComplete: false
     },
     saveStamp: null
@@ -130,6 +142,14 @@
     { speaker: 'ポチ', text: 'わたしはポチ！ いい匂いにつられて来ちゃった！\nここ、みんなで暮らしてるの？', char: 'pochi' },
     { speaker: 'シャノン', text: 'うん。まだ作り始めたばかりだけどね。\nよかったらポチも一緒にどう？', char: 'shannon' },
     { speaker: 'ポチ', text: 'いいの！？ やったー！\nわたし、外を歩き回るの得意だよ。使えそうなものも探してくる！', char: 'pochi' }
+  ];
+
+  const BUNNY_EVENT = [
+    { speaker: 'ポチ', text: 'そうだ！ 探索の途中で、面白い子に会ったんだ。\n一緒に来てもらったよ！', char: 'pochi' },
+    { speaker: '？？？', text: 'やっほー！ ここが最近できた集落？\n思ってたよりずっといい感じじゃん！', char: 'bunny' },
+    { speaker: 'バーニィ', text: 'あたしはバーニィ！ にぎやかな場所、大好きなんだ。', char: 'bunny' },
+    { speaker: 'シャノン', text: 'よかったら、バーニィもここで一緒に暮らさない？', char: 'shannon' },
+    { speaker: 'バーニィ', text: 'もちろん！ せっかくだし、もっと楽しい場所にしようよ。\n広場を盛り上げるなら任せて！', char: 'bunny' }
   ];
 
   const LILY_EVENT = [
@@ -171,7 +191,7 @@
       if (parsed.flags?.slaminAssignedToWell && !state.assignments.well.includes('slamin')) {
         state.assignments.well = ['slamin'];
       }
-      state.version = 8;
+      state.version = 9;
       recalculateStats();
       if (!parsed.tutorialStep) state.tutorialStep = deriveTutorialStep();
       if ((parsed.version || 0) < 4 && state.flags.slaminAssignedToWell && !state.flags.lilyJoined) {
@@ -182,6 +202,12 @@
         state.flags.pochiEventReady = true;
         state.flags.sliceComplete = false;
         state.tutorialStep = 'meetPochi';
+      }
+      // v0.8までで初回探索を受け取り済みなら、バーニィ編の直前へ移行。
+      if ((parsed.version || 0) < 9 && state.flags.explorationClaimed && !state.flags.bunnyJoined) {
+        state.flags.bunnyEventReady = true;
+        state.flags.sliceComplete = false;
+        state.tutorialStep = 'meetBunny';
       }
       return true;
     } catch (err) {
@@ -214,7 +240,9 @@
   function foodCount() { return state.items.matari || 0; }
 
   function deriveTutorialStep() {
-    if (state.flags.explorationClaimed || state.flags.sliceComplete) return 'complete';
+    if (state.flags.bunnyAssignedToPlaza || state.flags.sliceComplete) return 'complete';
+    if (state.flags.bunnyJoined) return 'assignBunny';
+    if (state.flags.bunnyEventReady || (state.flags.explorationClaimed && !state.flags.bunnyJoined)) return 'meetBunny';
     if (state.flags.explorationReady) return 'explorationReady';
     if (state.flags.explorationStarted) return 'waitExploration';
     if (state.flags.pochiJoined) return 'startExploration';
@@ -240,6 +268,7 @@
     if (state.flags.slaminJoined) ids.push('slamin');
     if (state.flags.lilyJoined) ids.push('lily');
     if (state.flags.pochiJoined) ids.push('pochi');
+    if (state.flags.bunnyJoined) ids.push('bunny');
     return ids;
   }
 
@@ -281,6 +310,7 @@
     if (hasAbilityAtFacility('plaza', '盛り上げ')) state.stats.liveliness += 20;
 
     state.flags.slaminAssignedToWell = (state.assignments.well || []).includes('slamin');
+    state.flags.bunnyAssignedToPlaza = (state.assignments.plaza || []).includes('bunny');
   }
 
   function assignResident(residentId, facilityId) {
@@ -299,6 +329,10 @@
     recalculateStats();
     if (residentId === 'slamin' && facilityId === 'well' && state.tutorialStep === 'assignSlamin') {
       setTutorialStep('waitLily');
+    }
+    if (residentId === 'bunny' && facilityId === 'plaza' && state.tutorialStep === 'assignBunny') {
+      state.flags.sliceComplete = true;
+      setTutorialStep('complete');
     }
     save(true);
     return true;
@@ -375,7 +409,7 @@
     let index = 0;
     const show = () => {
       const line = lines[index];
-      const dialogueImages = { shannon: 'images/shannon.webp', slamin: 'images/slamin.webp', lily: 'images/lily.webp', pochi: 'images/pochi.webp' };
+      const dialogueImages = { shannon: 'images/shannon.webp', slamin: 'images/slamin.webp', lily: 'images/lily.webp', pochi: 'images/pochi.webp', bunny: 'images/bunny.webp' };
       const charHtml = line.char
         ? `<img class="dialogue-char ${line.char}" src="${dialogueImages[line.char]}" alt="${escapeHtml(line.speaker)}">`
         : '';
@@ -474,7 +508,7 @@
   function needsTabDot(tab) {
     if (tab === 'actions' && ['collectStone', 'sleepAfterWell', 'waitLily', 'waitCultivation', 'startExploration', 'waitExploration'].includes(state.tutorialStep)) return true;
     if (tab === 'build' && state.tutorialStep === 'repairWell') return true;
-    if (tab === 'base' && ['meetSlamin', 'assignSlamin', 'meetLily', 'startCultivation', 'harvestCultivation', 'meetPochi', 'explorationReady'].includes(state.tutorialStep)) return true;
+    if (tab === 'base' && ['meetSlamin', 'assignSlamin', 'meetLily', 'startCultivation', 'harvestCultivation', 'meetPochi', 'explorationReady', 'meetBunny', 'assignBunny'].includes(state.tutorialStep)) return true;
     return false;
   }
 
@@ -499,11 +533,27 @@
     }
   }
 
+  function stableResidentOrder(ids, seed) {
+    const hash = text => {
+      let h = 2166136261;
+      for (let i = 0; i < text.length; i++) {
+        h ^= text.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    };
+    return [...ids].sort((a, b) => hash(`${seed}:${a}`) - hash(`${seed}:${b}`));
+  }
+
   function facilityResidentsForScene(facilityId) {
     if (facilityId === 'plaza') {
-      const explicitlyPlaced = state.assignments.plaza || [];
+      // 広場は最大10人まで描画。正式配置された住民を優先し、残り枠に未配置住民を入れる。
+      // 未配置住民が多い場合は、ゲーム内の日付を種にした順序で日ごとに顔ぶれが変わる。
+      const maxVisible = 10;
+      const explicitlyPlaced = (state.assignments.plaza || []).filter(id => !residentAwayFromBase(id));
       const idle = joinedResidentIds().filter(id => !getResidentFacility(id) && !residentAwayFromBase(id));
-      return [...new Set([...explicitlyPlaced.filter(id => !residentAwayFromBase(id)), ...idle])];
+      const shuffledIdle = stableResidentOrder(idle, `plaza-day-${state.day}`);
+      return [...explicitlyPlaced.slice(0, maxVisible), ...shuffledIdle.slice(0, Math.max(0, maxVisible - explicitlyPlaced.length))];
     }
     return (state.assignments[facilityId] || []).filter(id => !residentAwayFromBase(id));
   }
@@ -526,11 +576,11 @@
     // bottom は下部メッセージパネルの「安全線」より上に置く。
     // 人数が増えても前列・中列・後列の順に並べられる。
     const plazaPositions = [
-      { left: 31, bottom: 146, width: 104 }, { left: 50, bottom: 140, width: 96 },
-      { left: 72, bottom: 146, width: 100 }, { left: 20, bottom: 226, width: 86 },
-      { left: 42, bottom: 234, width: 84 }, { left: 65, bottom: 230, width: 86 },
-      { left: 82, bottom: 224, width: 80 }, { left: 29, bottom: 310, width: 72 },
-      { left: 55, bottom: 304, width: 74 }, { left: 76, bottom: 310, width: 72 }
+      { left: 24, bottom: 146, width: 102 }, { left: 48, bottom: 140, width: 96 },
+      { left: 28, bottom: 226, width: 86 }, { left: 51, bottom: 232, width: 84 },
+      { left: 70, bottom: 228, width: 82 }, { left: 16, bottom: 308, width: 72 },
+      { left: 36, bottom: 304, width: 72 }, { left: 57, bottom: 306, width: 72 },
+      { left: 76, bottom: 310, width: 68 }, { left: 45, bottom: 382, width: 64 }
     ];
     const wellPositions = [
       { left: 72, bottom: 146, width: 112 }, { left: 25, bottom: 150, width: 104 }
@@ -551,12 +601,14 @@
       if (step === 'meetLily') return '広場に見慣れない魔物娘が来ています。❗を確認してみましょう。';
       if (step === 'startCultivation') return 'リリーが仲間になりました。リリーをタップして、マタリの実の栽培をお願いしましょう。';
       if (step === 'waitCultivation') return 'リリーがマタリの実を栽培中。翌朝になるまで待ちましょう。';
-      if (step === 'harvestCultivation') return '栽培が終わったようです。リリーの頭上の印を確認して、マタリの実を受け取りましょう。';
+      if (step === 'harvestCultivation') return '栽培が終わったようです。印が出ているリリーをタップして、マタリの実を受け取りましょう。';
       if (step === 'meetPochi') return '食べものの匂いにつられて、誰かが広場へやって来たようです。❗を確認しましょう。';
       if (step === 'startExploration') return 'ポチが仲間になりました。「行動」から探索をお願いしてみましょう。';
       if (step === 'waitExploration') return `ポチは周辺を探索中。帰還まであと${state.tasks.exploration?.remaining ?? 0}区分です。`;
-      if (step === 'explorationReady') return 'ポチが探索から帰ってきました。頭上の箱印を確認して報告を受けましょう。';
-      if (step === 'complete') return 'ポチの初回探索が完了しました。今回の実装範囲はここまでです。';
+      if (step === 'explorationReady') return 'ポチが探索から帰ってきました。📦が出ているポチをタップして報告を受けましょう。';
+      if (step === 'meetBunny') return 'ポチが探索先で出会った子を連れてきたようです。❗を確認しましょう。';
+      if (step === 'assignBunny') return 'バーニィが仲間になりました。「設備情報・配置」から広場に配置してみましょう。';
+      if (step === 'complete') return 'バーニィの「盛り上げ」が発動中。広場から活気 +20。今回の実装範囲はここまでです。';
       return '拠点の中心になる広場。シャノンはここで様子を見ています。';
     }
     if (!state.flags.wellBuilt) return '壊れた井戸。石材5個があれば修復できます。';
@@ -577,6 +629,7 @@
     const slaminEvent = isWell && state.flags.slaminEventReady && !state.flags.slaminJoined;
     const lilyEvent = id === 'plaza' && state.flags.lilyEventReady && !state.flags.lilyJoined;
     const pochiEvent = id === 'plaza' && state.flags.pochiEventReady && !state.flags.pochiJoined;
+    const bunnyEvent = id === 'plaza' && state.flags.bunnyEventReady && !state.flags.bunnyJoined;
 
     const mainObject = isWell
       ? `<button class="facility-object well-focus ${state.flags.wellBuilt ? '' : 'broken'}" id="facility-object" aria-label="${facilityName('well')}">
@@ -611,6 +664,7 @@
         ${slaminEvent ? '<button class="event-pin event-center" id="slamin-event" aria-label="イベント">!</button>' : ''}
         ${lilyEvent ? '<button class="event-pin event-center" id="lily-event" aria-label="リリー来訪イベント">!</button>' : ''}
         ${pochiEvent ? '<button class="event-pin event-center" id="pochi-event" aria-label="ポチ来訪イベント">!</button>' : ''}
+        ${bunnyEvent ? '<button class="event-pin event-center" id="bunny-event" aria-label="バーニィ来訪イベント">!</button>' : ''}
 
         <div class="scene-bottom-panel">
           <div class="facility-dots">${FACILITY_ORDER.map((fid, i) => `<i class="${i === idx ? 'active' : ''}"></i>`).join('')}</div>
@@ -654,7 +708,12 @@
           <div><div class="card-head"><span class="card-title">ポチ</span><span class="badge">獣</span></div>
           <p class="card-desc">犬娘<br>得意：探索<br>状態：${residentStatus('pochi')}</p></div>
         </div>` : ''}
-        ${!state.flags.slaminJoined && !state.flags.lilyJoined && !state.flags.pochiJoined ? '<div class="empty-state">まだ通常の魔物娘はいません。</div>' : ''}
+        ${state.flags.bunnyJoined ? `<div class="resident-list-card static-card">
+          <img src="images/bunny.webp" alt="バーニィ">
+          <div><div class="card-head"><span class="card-title">バーニィ</span><span class="badge">獣</span></div>
+          <p class="card-desc">ウサギ娘<br>得意：盛り上げ<br>状態：${residentStatus('bunny')}</p></div>
+        </div>` : ''}
+        ${!state.flags.slaminJoined && !state.flags.lilyJoined && !state.flags.pochiJoined && !state.flags.bunnyJoined ? '<div class="empty-state">まだ通常の魔物娘はいません。</div>' : ''}
       </div>
     </section>`;
   }
@@ -684,7 +743,7 @@
       const night = state.timeIndex === 3;
       body = `<div class="tutorial-lock tutorial-focus"><strong>栽培が終わるのを待とう</strong><p>リリーが栽培中です。今回は待ち時間のため、「${night ? '眠る' : '休む'}」で時間を進められます。翌朝に完成します。</p></div><div class="card-stack"><button class="action-card action-highlight" id="wait-cultivation"><div class="card-head"><span class="card-title">${night ? '🌙 眠る' : '☕ 休む'}</span><span class="card-time">1区分</span></div><p class="card-desc">何もせず1区分進めます。</p></button></div>`;
     } else if (step === 'harvestCultivation') {
-      body = `<div class="tutorial-lock"><strong>栽培が終わりました</strong><p>リリーの頭上に完了アイコンが出ています。広場でマタリの実を受け取りましょう。</p><button class="primary-btn" id="go-lily-harvest">リリーのところへ</button></div>`;
+      body = `<div class="tutorial-lock"><strong>栽培が終わりました</strong><p>リリーに完了アイコンが出ています。印が出ているリリーをタップして、マタリの実を受け取りましょう。</p><button class="primary-btn" id="go-lily-harvest">リリーのところへ</button></div>`;
     } else if (step === 'meetPochi') {
       body = `<div class="tutorial-lock"><strong>食べものの匂いにつられて……</strong><p>必須イベントが発生しています。広場の❗を確認しましょう。</p><button class="primary-btn" id="go-pochi-event">広場へ行く</button></div>`;
     } else if (step === 'startExploration') {
@@ -694,8 +753,12 @@
       body = `<div class="tutorial-lock tutorial-focus"><strong>ポチが探索中</strong><p>帰還まであと${remaining}区分です。探索は裏で進むので、その間に主人公も別の行動ができます。</p></div><div class="card-stack"><button class="action-card" id="explore-gather-wood"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。ポチの探索も1区分進みます。</p></button><button class="action-card" id="explore-gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。ポチの探索も1区分進みます。</p></button><button class="action-card" id="explore-rest"><div class="card-head"><span class="card-title">☕ 休む</span><span class="card-time">1区分</span></div><p class="card-desc">何も得ずに1区分進めます。</p></button></div>`;
     } else if (step === 'explorationReady') {
       body = `<div class="tutorial-lock"><strong>ポチが帰ってきました</strong><p>探索結果を受け取るまで、次の時間行動には進みません。広場のポチを確認しましょう。</p><button class="primary-btn" id="go-pochi-report">ポチのところへ</button></div>`;
+    } else if (step === 'meetBunny') {
+      body = `<div class="tutorial-lock"><strong>ポチが誰かを連れてきたようです</strong><p>探索先で出会った魔物娘が広場に来ています。必須イベントを確認しましょう。</p><button class="primary-btn" id="go-bunny-event">広場へ行く</button></div>`;
+    } else if (step === 'assignBunny') {
+      body = `<div class="tutorial-lock tutorial-focus"><strong>バーニィを広場に配置しよう</strong><p>広場は最大10人まで配置できます。「盛り上げ」を持つ住民が1人以上いれば、活気が+20されます。効果は重複しません。</p><button class="primary-btn" id="go-plaza-assign">広場の配置を開く</button></div>`;
     } else if (step === 'complete') {
-      body = `<div class="tutorial-lock complete-card"><strong>ポチの探索まで実装完了</strong><p>探索で木材と石材を持ち帰れるようになりました。今回の実装範囲はここまでです。次は初回探索をきっかけにバーニィ加入へつなげられます。</p></div>`;
+      body = `<div class="tutorial-lock complete-card"><strong>バーニィの配置まで実装完了</strong><p>広場に「盛り上げ」が発動し、活気が+20されました。今回の実装範囲はここまでです。次は簡素な小屋の建築へ進めます。</p></div>`;
     } else {
       body = `<div class="card-stack"><button class="action-card" id="gather-stone"><div class="card-head"><span class="card-title">🪨 石材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">石材 +5。</p></button><button class="action-card" id="gather-wood"><div class="card-head"><span class="card-title">🪵 木材を集める</span><span class="card-time">1区分</span></div><p class="card-desc">木材 +5。</p></button></div>`;
     }
@@ -739,7 +802,7 @@
         ${FACILITY_ORDER.map(id => {
           const assigned = (state.assignments[id] || []).length;
           const event = (id === 'well' && state.flags.slaminEventReady && !state.flags.slaminJoined) ||
-            (id === 'plaza' && ((state.flags.lilyEventReady && !state.flags.lilyJoined) || (state.flags.pochiEventReady && !state.flags.pochiJoined) || ['startCultivation', 'harvestCultivation', 'explorationReady'].includes(state.tutorialStep)));
+            (id === 'plaza' && ((state.flags.lilyEventReady && !state.flags.lilyJoined) || (state.flags.pochiEventReady && !state.flags.pochiJoined) || (state.flags.bunnyEventReady && !state.flags.bunnyJoined) || ['startCultivation', 'harvestCultivation', 'explorationReady', 'assignBunny'].includes(state.tutorialStep)));
           return `<button class="facility-list-card" data-jump-facility="${id}">
             <div><strong>${facilityName(id)}</strong>${event ? '<span class="event-mini">!</span>' : ''}<small>${id === 'well' && !state.flags.wellBuilt ? '修復が必要' : `配置 ${assigned} / ${FACILITIES[id].capacity}`}</small></div>
             <span>›</span>
@@ -770,8 +833,9 @@
         return `<div class="placed-row"><img src="${r.image}" alt="${r.name}"><div><strong>${r.name}</strong><small>得意：${r.ability}</small></div><button class="mini-btn" data-unassign="${id}" data-from="${facilityId}">外す</button></div>`;
       }).join('')}</div>` : (!isBrokenWell ? '<p class="muted-text">配置中の住民はいません。</p>' : '')}
       <div class="sheet-actions">
-        ${usable && !(state.tutorialStep === 'assignSlamin' && facilityId !== 'well') ? `<button class="primary-btn" id="open-resident-select">${placed.length >= facility.capacity ? '住民を入れ替える' : '住民を配置する'}</button>` : ''}
+        ${usable && !(state.tutorialStep === 'assignSlamin' && facilityId !== 'well') && !(state.tutorialStep === 'assignBunny' && facilityId !== 'plaza') ? `<button class="primary-btn" id="open-resident-select">${placed.length >= facility.capacity ? '住民を入れ替える' : '住民を配置する'}</button>` : ''}
         ${state.tutorialStep === 'assignSlamin' && facilityId !== 'well' ? '<p class="muted-text">チュートリアル中は、先にスラミンを井戸へ配置しましょう。</p>' : ''}
+        ${state.tutorialStep === 'assignBunny' && facilityId !== 'plaza' ? '<p class="muted-text">チュートリアル中は、先にバーニィを広場へ配置しましょう。</p>' : ''}
         <button class="secondary-btn" id="close-sheet">閉じる</button>
       </div>
     </section></div>`;
@@ -790,12 +854,13 @@
           const effective = r.ability === facility.effectAbility;
           const here = current === facilityId;
           const busy = residentAwayFromBase(id);
-          return `<button class="resident-select-card ${here ? 'selected' : ''}" data-select-resident="${id}" ${here || busy ? 'disabled' : ''}>
+          const tutorialBlocked = state.tutorialStep === 'assignBunny' && id !== 'bunny';
+          return `<button class="resident-select-card ${here ? 'selected' : ''}" data-select-resident="${id}" ${here || busy || tutorialBlocked ? 'disabled' : ''}>
             <img src="${r.image}" alt="${r.name}">
             <div class="resident-card-body">
               <div class="resident-card-title"><strong>${r.name}</strong><span class="badge">${r.species}</span></div>
               <p>得意：${r.ability}</p>
-              <small>${busy ? '現在：探索中' : here ? `現在：${facilityName(facilityId)}に配置中` : current ? `現在：${facilityName(current)}に配置中` : '現在：待機中'}</small>
+              <small>${tutorialBlocked ? 'チュートリアル：今回はバーニィを選びます' : busy ? '現在：探索中' : here ? `現在：${facilityName(facilityId)}に配置中` : current ? `現在：${facilityName(current)}に配置中` : '現在：待機中'}</small>
               <em class="${effective ? 'effect-good' : 'effect-none'}">${effective ? '✓ この設備で特殊効果あり' : 'この設備では特殊効果なし'}</em>
             </div>
           </button>`;
@@ -1049,6 +1114,22 @@
       renderGame();
     });
 
+    document.getElementById('go-bunny-event')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'plaza';
+      overlay = null;
+      save(true);
+      renderGame();
+    });
+
+    document.getElementById('go-plaza-assign')?.addEventListener('click', () => {
+      state.currentTab = 'base';
+      state.currentFacility = 'plaza';
+      overlay = { type:'facility', facilityId:'plaza' };
+      save(true);
+      renderGame();
+    });
+
     document.getElementById('repair-well')?.addEventListener('click', () => {
       if (state.resources.stone < 5 || state.flags.wellBuildStarted) return;
       state.resources.stone -= 5;
@@ -1122,6 +1203,20 @@
       });
     });
 
+    document.getElementById('bunny-event')?.addEventListener('click', () => {
+      playDialogue(BUNNY_EVENT, () => {
+        state.flags.bunnyEventReady = false;
+        state.flags.bunnyJoined = true;
+        setTutorialStep('assignBunny');
+        recalculateStats();
+        save(true);
+        state.currentTab = 'base';
+        state.currentFacility = 'plaza';
+        renderGame();
+        toast('バーニィが仲間になりました！ 活気 +10');
+      });
+    });
+
     document.getElementById('open-resident-select')?.addEventListener('click', () => {
       overlay = { type:'residentSelect', facilityId: overlay.facilityId };
       renderGame();
@@ -1130,6 +1225,10 @@
     document.querySelectorAll('[data-select-resident]').forEach(btn => btn.addEventListener('click', () => {
       const residentId = btn.dataset.selectResident;
       const facilityId = overlay.facilityId;
+      if (state.tutorialStep === 'assignBunny' && (residentId !== 'bunny' || facilityId !== 'plaza')) {
+        toast('今回はバーニィを広場に配置してみましょう');
+        return;
+      }
       const currentPlaced = state.assignments[facilityId] || [];
       if (currentPlaced.length >= FACILITIES[facilityId].capacity && getResidentFacility(residentId) !== facilityId) {
         toast('この設備の配置上限に達しています。先に住民を外してください');
@@ -1148,6 +1247,10 @@
       const facilityId = btn.dataset.from;
       if (residentId === 'slamin' && state.tutorialStep !== 'complete') {
         toast('チュートリアル中はスラミンを井戸に配置したまま進めましょう');
+        return;
+      }
+      if (residentId === 'bunny' && state.tutorialStep === 'assignBunny') {
+        toast('まずはバーニィを広場に配置した状態で効果を確認しましょう');
         return;
       }
       unassignResident(residentId, facilityId);
@@ -1258,12 +1361,15 @@
       state.tasks.exploration = null;
       state.flags.explorationReady = false;
       state.flags.explorationClaimed = true;
-      state.flags.sliceComplete = true;
-      setTutorialStep('complete');
+      state.flags.bunnyEventReady = state.stats.liveliness >= 30;
+      state.flags.sliceComplete = false;
+      setTutorialStep(state.flags.bunnyEventReady ? 'meetBunny' : 'free');
       overlay = null;
       save(true);
       renderGame();
-      toast(`探索報酬：木材 +${reward.wood} / 石材 +${reward.stone}`);
+      toast(state.flags.bunnyEventReady
+        ? `探索報酬：木材 +${reward.wood} / 石材 +${reward.stone}。ポチが誰かを連れてきたようです！`
+        : `探索報酬：木材 +${reward.wood} / 石材 +${reward.stone}`);
     });
 
     document.getElementById('manual-save')?.addEventListener('click', () => save(false));
