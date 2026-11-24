@@ -15,7 +15,7 @@ const ABILITY_ENGINE=(()=>{
   let combos=[[]];for(let i=0;i<copies;i++)combos=combos.flatMap(path=>eligible.map(uid=>[...path,uid]));
   return combos;
  }
- function evaluate(members,stage,ts,alrauneTargets=[]){
+ function evaluate(members,stage,ts,alrauneTargets=[],base={}){
   const raw=members.map(baseStats), totals=[0,0,0];
   raw.forEach(s=>s.forEach((v,i)=>totals[i]+=v));
   const leaders=raw.map(s=>s[0]),species=new Set(members.map(tribe)).size;
@@ -70,11 +70,12 @@ const ABILITY_ENGINE=(()=>{
   members.forEach((u,i)=>{
    let value=adjusted[i].reduce((sum,v,k)=>sum+v*stage.mods[k],0);
    if(stage.tribes.includes(tribe(u)))value*=1.1;
+   value*=1+(base.training?.[tribe(u)]||0);
    if(name(u)==='ヴァンパイア')value*=1.3;
    ep+=value;
   });
   if(members.length&&name(members[0])==='土偶娘')ep*=.9;
-  let great=.2,recruit=.35,bossRecruit=.03,stoneMod=0,shorten=0;
+  let great=.2+(base.monument||0),recruit=.35,bossRecruit=.03,stoneMod=0,shorten=0;
   for(let i=0;i<members.length;i++){
    const u=members[i],n=name(u);
    if(n==='スライム娘'){const totalEnergy=members.reduce((s,x)=>s+x.energy,0);if(totalEnergy>=300)great+=.1;if(totalEnergy>=400)great+=.1}
