@@ -67,7 +67,7 @@ const ABILITY_ENGINE=(()=>{
    if(n==='スライムベス娘')mod[0]+=.05*members.filter(x=>tribe(x)==='スライム').length;
    if(n==='モス娘'&&members.some(x=>x.uid!==u.uid&&name(x)!=='モス娘'&&tribe(x)==='虫'))mod[1]+=.1*k2;
    if(n==='フクロウ娘'&&night(ts))mod[0]+=.1*k2,mod[1]+=.1*k2,mod[2]+=.1*k2;
-   if(n==='ナメクジ娘'&&u.energy===100)mod[1]+=.3*k2;
+   if(n==='ナメクジ娘'&&u.energy===maxEnergy(u))mod[1]+=.3*k2;
    if(n==='ワーバット'&&stage.area==='洞窟')mod[2]+=.5;
    if(n==='ワーバット'&&members.some(x=>tribe(x)==='アンデッド'))mod[2]+=.2*k2;
    if((n==='ゴーレム娘'||n==='マッドゴーレム娘')&&j===0)mod[1]+=.1;
@@ -180,7 +180,7 @@ const ABILITY_ENGINE=(()=>{
     case 'フクロウ娘':A(members.some(x=>x.energy<=50),'対象の攻撃・防御・魔法 +10%',`開始前元気50以下：${members.filter(x=>x.energy<=50).map(x=>`${members.indexOf(x)+1}番 ${name(x)}`).join('、')||'なし'}`);B(night(ts),'自身の攻撃・防御・魔法 +10%','18:00以上・翌06:00未満');break;
     case 'シルフィ':A(syl++<info.silphyActive,`先頭の元気 −${Math.ceil((n('モス娘')?10:20)*(1-cv(members[0]||{},'extra')/100))}（追加）／攻撃・魔法 +20%、防御 −20%`,'通常消費を確保した後、追加元気が足りる場合');B(true,'探索時間 −10%');break;
     case 'ドリアード':A(stage.area==='森林','大成功率 +20ポイント','森林限定');B(stage.area==='森林','部隊内の植物族の魔法力 +20%','森林限定');break;
-    case 'ナメクジ娘':A('end','50%の確率で自身の元気 +20');B(u.energy===100,'自身の防御力 +30%',`開始前元気 ${u.energy} / 100`);break;
+    case 'ナメクジ娘':A('end','50%の確率で自身の元気 +20');B(u.energy===maxEnergy(u),'自身の防御力 +30%',`開始前元気 ${u.energy} / ${maxEnergy(u)}（満タン条件）`);break;
     case 'ワーバット':A(stage.area==='洞窟','自身の魔法力 +50%','洞窟限定');B(tribeCount('アンデッド')>0,'自身の魔法力 +20%','部隊にアンデッド族がいる');break;
     case 'アラクネ':A(true,'部隊全員の通常消費元気 +10%／探索時間 −15%');B(true,'部隊内の虫族の防御力 +5%');break;
     case 'ゴーレム娘':A(first,'自身の防御力 +10%','先頭配置');B(true,'部隊内の物質族の防御力 +5%');break;
