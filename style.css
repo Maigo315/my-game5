@@ -243,3 +243,11 @@ html,body{touch-action:pan-x pan-y pinch-zoom}button,summary,.nav,.char,.member{
   .home-scene-portrait{height:80%}
   .home-scene-speech{bottom:204px}
 }
+
+/* v0.7.5.5: center the portrait and layer the circular controls above it. */
+.home-scene-portrait{left:0;top:8%;width:95%;height:71%;object-position:center center;z-index:0}
+.home-scene-mainlinks{width:132px;right:10px;align-items:flex-end}
+.home-scene-mainlinks .scene-link-main:nth-child(odd){align-self:flex-end;margin-right:36px}
+.home-scene-mainlinks .scene-link-main:nth-child(2){align-self:flex-end;margin-right:0}
+@media(max-width:380px){.home-scene-portrait{left:0;width:96%;height:71%}.home-scene-mainlinks{width:124px}.home-scene-mainlinks .scene-link-main:nth-child(odd){margin-right:32px}}
+@media(max-height:700px){.home-scene-portrait{top:8%;height:69%}.home-scene-mainlinks{top:14%;gap:6px}.home-scene-mainlinks .scene-link-main{width:clamp(60px,12dvh,84px);height:clamp(60px,12dvh,84px)}}
