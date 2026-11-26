@@ -91,3 +91,14 @@ html,body{touch-action:pan-x pan-y pinch-zoom}button,summary,.nav,.char,.member{
 .common-footer .transfer-actions{margin:0}
 .medal-balance{color:#527158;font-variant-numeric:tabular-nums}
 @media(max-height:420px){.common-header,.common-footer{padding-top:5px;padding-bottom:5px}}
+
+/* v0.7.0.1: compact two-row header. */
+:root{--resource-height:84px}
+.resource-heading{max-width:560px;margin:auto;height:29px;padding:4px 13px 0;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#355840}
+.resource-title{font-size:15px;font-weight:750;white-space:nowrap}
+.resource-level{font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.resource-inner{height:55px;padding:3px 9px 7px;gap:4px}
+.resource-inner>span{flex-direction:column;gap:2px;padding:4px 2px;border-radius:12px;line-height:1.15}
+.resource-label{font-size:10px;color:#526356;white-space:nowrap}
+.resource-value{display:flex;align-items:center;justify-content:center;gap:3px;max-width:100%;font-size:clamp(10px,3.2vw,14px);line-height:1.2}
+.resource-value b{min-width:0;overflow-wrap:anywhere}
