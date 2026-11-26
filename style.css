@@ -191,3 +191,55 @@ html,body{touch-action:pan-x pan-y pinch-zoom}button,summary,.nav,.char,.member{
 .home-scene-claims{z-index:2}
 @media(max-width:350px){.home-scene-links{gap:4px}.home-scene-links button{width:44px}.home-scene-mainlinks button{min-height:42px;font-size:13px}.home-scene-mainlinks button:nth-child(odd){margin-right:12px}.home-scene-portrait{width:85%}}
 @media(max-height:700px){.home-scene-mainlinks{top:18%;gap:7px}.home-scene-mainlinks button{min-height:40px}.home-scene-portrait{height:72%}}
+
+
+/* v0.7.5.4: tighten header connection and use larger circular home shortcuts. */
+.home-scene{margin:-7px -14px 12px;height:clamp(445px,calc(100dvh - var(--resource-top) - 58px - env(safe-area-inset-bottom,0px)),735px);border-top-left-radius:0;border-top-right-radius:0}
+.home-scene::before{background:linear-gradient(90deg,transparent 53%,#10271d38),linear-gradient(0deg,#10291ef0 0%,#17312480 22%,transparent 56%)}
+.home-scene-links{top:9px;right:10px;width:auto;flex-direction:row;gap:4px;z-index:3}
+.home-scene-links button{width:48px;min-height:46px;padding:4px 1px;border-radius:10px;font-size:10px;background:#fffdf0dd;box-shadow:0 2px 5px #14291f30}
+.home-scene-links button>span{font-size:18px}
+.home-scene-portrait{left:-11%;top:3%;width:84%;height:84%;object-position:center bottom}
+.home-scene-mainlinks{position:absolute;right:10px;top:16%;display:flex;flex-direction:column;align-items:flex-start;gap:10px;z-index:2;width:170px}
+.home-scene-mainlinks .scene-link-main{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:96px;height:96px;padding:8px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fffdf7f8 0%,#efe4caee 72%,#e3d8bbf0 100%);color:#38533e;border:1px solid #fffdf4d8;box-shadow:0 4px 10px #13291e50;font-size:14px;line-height:1.1;text-align:center;white-space:normal}
+.home-scene-mainlinks .scene-link-main span{font-size:26px;line-height:1}
+.home-scene-mainlinks .scene-link-main strong{font-size:16px;font-weight:800;letter-spacing:.02em}
+.home-scene-mainlinks .scene-link-main:nth-child(1){align-self:flex-start}
+.home-scene-mainlinks .scene-link-main:nth-child(2){align-self:flex-end}
+.home-scene-mainlinks .scene-link-main:nth-child(3){align-self:flex-start}
+.home-scene-name{left:12px;bottom:104px;max-width:46%;z-index:2}
+.home-scene-name button{display:flex;align-items:center;gap:6px;text-align:left;background:transparent;color:#fff;text-shadow:0 2px 5px #182e20;padding:5px 2px;min-height:44px;max-width:100%}
+.home-scene-name strong{font-size:clamp(15px,4.9vw,23px);min-width:0}
+.home-scene-name button span{flex:none;display:grid;place-items:center;width:25px;height:25px;background:#fffdf0df;color:#3d5744;text-shadow:none;border-radius:50%;font-size:17px}
+.home-scene-actions{width:44%;right:16px;bottom:74px;z-index:2}
+.home-scene-actions .scene-explore{min-height:76px;border:1px solid #e9d6a0;box-shadow:0 4px 14px #13291e80,inset 0 0 0 2px #ffffff18;background:linear-gradient(145deg,#5b8b68,#244d37)}
+.scene-explore strong{font-size:28px;letter-spacing:.03em}
+.scene-explore small{font-size:10px}
+.home-scene-claims{z-index:2;bottom:12px}
+.home-scene-speech{left:12px;bottom:214px;max-width:49%}
+@media(max-width:380px){
+  .home-scene{height:clamp(430px,calc(100dvh - var(--resource-top) - 60px - env(safe-area-inset-bottom,0px)),700px)}
+  .home-scene-portrait{left:-13%;width:88%;height:82%}
+  .home-scene-mainlinks{width:158px;top:17%;gap:9px}
+  .home-scene-mainlinks .scene-link-main{width:88px;height:88px}
+  .home-scene-mainlinks .scene-link-main strong{font-size:15px}
+  .home-scene-mainlinks .scene-link-main span{font-size:24px}
+  .home-scene-actions{width:42%;right:12px}
+  .scene-explore strong{font-size:24px}
+}
+@media(max-width:350px){
+  .home-scene-links{gap:3px}
+  .home-scene-links button{width:44px;min-height:42px;font-size:9px}
+  .home-scene-links button>span{font-size:16px}
+  .home-scene-mainlinks{width:146px}
+  .home-scene-mainlinks .scene-link-main{width:82px;height:82px;font-size:13px}
+  .home-scene-mainlinks .scene-link-main strong{font-size:14px}
+  .home-scene-mainlinks .scene-link-main span{font-size:22px}
+  .home-scene-name{max-width:44%}
+}
+@media(max-height:700px){
+  .home-scene-mainlinks{top:15%;gap:8px}
+  .home-scene-mainlinks .scene-link-main{width:84px;height:84px}
+  .home-scene-portrait{height:80%}
+  .home-scene-speech{bottom:204px}
+}
