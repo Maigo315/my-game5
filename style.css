@@ -40,3 +40,20 @@
 .roll-choice.roll-stage{animation:roll-choice-glow 2.5s ease-in-out both}.roll-choice.roll-stage.frame-UR{animation:roll-choice-glow 2.5s ease-in-out both,rainbow-border 1.25s linear 2}
 @keyframes roll-choice-glow{0%,100%{box-shadow:none}24%{box-shadow:0 0 10px var(--glow),inset 0 0 10px var(--glow)}52%{box-shadow:0 0 26px 5px var(--glow),inset 0 0 22px var(--glow)}78%{box-shadow:0 0 15px var(--glow),inset 0 0 10px var(--glow)}}
 @media(prefers-reduced-motion:reduce){.roll-choice.roll-stage,.roll-choice.roll-stage.frame-UR{animation:none}}
+
+
+/* v0.6.1.1: reward dialog has its own scroll region and always-visible close button. */
+html.reward-page-locked{overflow:hidden;overscroll-behavior:none}
+body.reward-page-locked{position:fixed;top:var(--reward-page-top,0px);left:0;right:0;width:100%;overflow:hidden}
+.reward-modal{display:flex;align-items:center;justify-content:center;inset:0 0 auto;height:100vh;height:100dvh;overflow:hidden;padding:12px 20px;padding:max(12px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));overscroll-behavior:none}
+.reward-dialog{display:flex;flex-direction:column;min-height:0;max-height:100%;padding:0;overflow:hidden}
+.reward-header,.reward-footer{flex:0 0 auto;background:#fffdf8;padding:14px 21px}
+.reward-header{border-bottom:1px solid #e4d9c3}
+.reward-header h2{font-size:clamp(18px,5.4vw,24px);line-height:1.35;margin:0}
+.reward-content{flex:0 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y pinch-zoom;padding:0 21px;overflow-wrap:anywhere}
+.reward-content:focus-visible{outline:2px solid #598d6c;outline-offset:-2px}
+.reward-content .reveal{grid-template-columns:repeat(3,minmax(0,1fr))}
+.reward-footer{border-top:1px solid #e4d9c3;padding-top:12px;padding-bottom:14px}
+.reward-footer button{display:block;width:100%;min-height:44px;touch-action:manipulation}
+@media(max-width:350px){.reward-modal{padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}.reward-header,.reward-content,.reward-footer{padding-left:14px;padding-right:14px}}
+@media(max-height:420px){.reward-header,.reward-footer{padding-top:6px;padding-bottom:6px}.reward-modal{padding-top:max(4px,env(safe-area-inset-top));padding-bottom:max(4px,env(safe-area-inset-bottom))}}
