@@ -1,11 +1,12 @@
 'use strict';
-/* v0.4: 31種の固有能力62枠。ゲーム固有の端数・同率処理は README の仮ルール参照。 */
+/* v0.6: 38種の固有能力76枠。ゲーム固有の端数・同率処理は README の仮ルール参照。 */
 const ABILITY_ENGINE=(()=>{
  const minute=60000;
  const count=(members,n)=>members.filter(u=>ch(u.cid).name===n).length;
  const name=u=>ch(u.cid).name;
  const tribe=u=>ch(u.cid).tribe;
  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+ const extraCost=(members,u)=>Math.ceil((count(members,'モス娘')?10:20)*(1-cv(u,'extra')/100));
  const isTop=(totals,i)=>totals[i]>=Math.max(...totals);
  const night=ts=>{const h=new Date(ts).getHours();return h>=18||h<6};
  function targetsForAlraune(members){
@@ -29,19 +30,22 @@ const ABILITY_ENGINE=(()=>{
    -(name(u)==='マイコニド'&&['森林','洞窟'].includes(stage.area)?10:0)
    -10*actualAl.filter(id=>id===u.uid).length-cv(u,"basic"))));
   const afterBasic=members.map((u,i)=>u.energy-basicCosts[i]);
-  const silphyExtra=Math.ceil((members.some(u=>name(u)==='モス娘')?10:20)*(1-cv(members[0]||{},'extra')/100));
+  const silphyExtra=extraCost(members,members[0]||{});
   let silphyActive=0, silphyCost=0;
   for(const u of members){if(name(u)==='シルフィ'&&members.length){if(afterBasic[0]>=silphyExtra){afterBasic[0]-=silphyExtra;silphyCost+=silphyExtra;silphyActive++;
       effects.push(`シルフィ：先頭の元気${silphyExtra}消費、攻撃・魔法+20%／防御-20%`)}
     else effects.push('シルフィ：先頭の元気不足で固有①は不発') }}
-  const allCosts=basicCosts.map((c,i)=>c+(i===0?silphyCost:0));
+  const extraCosts=members.map((u,i)=>i===0?silphyCost:0),richActive=[];
+  members.forEach((u,i)=>{if(name(u)!=='フォレストリッチ')return;const cost=extraCost(members,u);if(afterBasic[i]>=cost){afterBasic[i]-=cost;extraCosts[i]+=cost;richActive.push(u.uid);effects.push(`フォレストリッチ：自身の元気${cost}消費、大成功時報酬倍率+30ポイント`)}else effects.push('フォレストリッチ：元気不足で固有①は不発')});
+  const allCosts=basicCosts.map((c,i)=>c+extraCosts[i]);
   // 先頭の追加コストは探索基本消費を確保した残りから判定。通常探索開始判定には追加コストを要求しない。
   const canStart=members.length===4&&members.every((u,i)=>u.energy>=basicCosts[i]);
   const dcount=num('ドリアード'),mc=num('マイコニド'),ar=num('アラクネ'),go=num('ゴーレム娘'),doCount=num('土偶娘'),al=num('アルラウネ');
   for(let j=0;j<members.length;j++){
    const u=members[j],n=name(u),t=tribe(u),s=raw[j],mod=addMod[j],flat=addFlat[j];
    for(let k=0;k<3;k++)mod[k]+=(cv(u,"stat"+k)+cv(u,"areaStat"+k,stage.area))/100;
-   mod[1]+=.05*mc-.05*num('ノーブルローズ');mod[0]-=.05*al;
+   mod[1]+=.05*mc-.05*num('ノーブルローズ')-(names[0]==='エビルアルラウネ'?.05:0);
+   if(j===0&&n==='エビルアルラウネ')mod[0]+=.2;mod[0]-=.05*al;
    if(n==='ラミア'&&u.energy>=100)mod[0]+=.1;
    if(t==='虫')mod[1]+=.05*ar;
    if(t==='物質')mod[1]+=.05*go;
@@ -72,6 +76,8 @@ const ABILITY_ENGINE=(()=>{
   const luck=members.reduce((sum,u)=>sum+luckOf(u),0),stoneOnly=names[0]==='ノーブルローズ';
   for(let i=0;i<members.length;i++){
    const u=members[i],n=name(u);
+   if(n==='グリーンバット'){if(stage.area==='森林')great+=.15;if(members.some(x=>tribe(x)==='アンデッド'))great+=.15}
+   if(n==='エビルアルラウネ')great-=.05;
    if(n==='スライム娘'){const totalEnergy=members.reduce((s,x)=>s+x.energy,0);if(totalEnergy>=300)great+=.1;if(totalEnergy>=400)great+=.1}
    if(n==='フェアリー')great+=members.filter(x=>tribe(x)==='神秘').length*.04;
    if(n==='スライムベス娘'&&isTop(totals,0))great+=.1;
@@ -106,16 +112,20 @@ const ABILITY_ENGINE=(()=>{
    const customEP=cv(u,'ep')+cv(u,'areaEp',stage.area)+4*cv(u,'full')*fraction+5*cv(u,'low')*(1-fraction)+(unity?(unity+1)*same:0)+(same?0:3*cv(u,'solo'))+([0,3,5,8][careful]||0)*Math.max(0,-netShorten)*10;
    value*=1+(innateEP+customEP)/100; individualEP.push(value); ep+=value;
   });
+  const preSleepEP=individualEP.slice();let sleepTarget=null;
+  if(names[0]==='スリーピィ'){sleepTarget=individualEP.indexOf(Math.max(...individualEP));individualEP.forEach((v,i)=>individualEP[i]=i===sleepTarget?0:v*1.35);ep=individualEP.reduce((a,b)=>a+b,0);effects.push(`スリーピィ：${sleepTarget+1}番 ${names[sleepTarget]} のEPを0、他のキャラのEP+35%`)}
   if(members.length&&name(members[0])==='土偶娘')ep*=.9;
   if(item==='support')ep*=1.2;
-  const thresholdFactor=1-sum('threshold')/100-(item==='cheat'?.2:0);
+  const thresholdFactor=1-(sum('threshold')+5*num('エビルアルラウネ')+(item==='cheat'?20:0))/100;
   const grade=stage.thresholds.reduce((g,t,i)=>ep>=t*thresholdFactor?i:g,-1);
   great+=item==='zeal'?.3:0;if(item==='superZeal')great=1;
+  const silkyActive=great>=.5-1e-10; if(silkyActive)great+=.15*num('シルキー');
   recruit+=sum('recruit')/100+luck*.002+(item==='friend'?.3:0);if(['sureFriend','fate'].includes(item))recruit=1;
   bossRecruit+=sum('boss')/100+luck*.0001;stoneMod+=sum('stone')/100;
+  const fisherCount=num('フィッシャースライム'),greatRecruit=grade<0?0:clamp(recruit+.2*fisherCount,0,1);
   const rate=clamp(great,0,1),additionalRecruit=grade<0?0:clamp([0,.05,.1,.15,.2][grade]+(grade>=2?.2*num('シルバースライム'):0)+sum('additional')/100+luck*.001,0,1);
-  return {ep:Math.floor(ep),rawEp:ep,individualEP,grade,thresholdFactor,rate,additionalRecruit,stoneOnly,recruit:grade<0?0:clamp(recruit,0,1),bossRecruit:clamp(bossRecruit,0,1),stoneMod,materialMod:sum('material')/100,greatMultiplier:1.5+sum('greatReward')/100,item,customRecovery:members.map(u=>({uid:u.uid,normal:cv(u,'recover'),great:cv(u,'greatRecover')})),
-   shorten:netShorten,duration,rawTotals:totals,adjusted,raw,basicCosts,extraCosts:[silphyCost,...Array(Math.max(0,members.length-1)).fill(0)],costs:allCosts,
+  return {ep:Math.floor(ep),rawEp:ep,individualEP,preSleepEP,sleepTarget,silkyActive,richActive,fisherCount,greatRecruit,grade,thresholdFactor,rate,additionalRecruit,stoneOnly,recruit:grade<0?0:clamp(recruit,0,1),bossRecruit:clamp(bossRecruit,0,1),stoneMod,materialMod:sum('material')/100,greatMultiplier:1.5+(sum('greatReward')+30*richActive.length)/100,item,customRecovery:members.map(u=>({uid:u.uid,normal:cv(u,'recover'),great:cv(u,'greatRecover')})),
+   shorten:netShorten,duration,rawTotals:totals,adjusted,raw,basicCosts,extraCosts,costs:allCosts,
    alrauneTargets:actualAl,alrauneCandidates:allowedAl,silphyActive,canStart,abilityLog:effects};
  }
  function statuses(members,stage,ts,info){
@@ -137,7 +147,7 @@ const ABILITY_ENGINE=(()=>{
     case 'アルラウネ':{A(true,'部隊全員の攻撃力 −5%／終了時、全員の元気 +5');const target=members.find(x=>x.uid===info.alrauneTargets?.[al++]);B(true,'最低Lvの1人の通常消費元気 −10',target?`この計算例の対象：${members.indexOf(target)+1}番 ${name(target)}（Lv.${target.level}）。出発時に抽選`:'最低Lvの対象を出発時に抽選');break;}
     case 'ウサギ娘':A(true,'基本勧誘率 +5ポイント');B(!!stage.boss,'ボス基本勧誘率 +2ポイント','ボスのいる探索先');break;
     case 'ハーピー':A(true,'探索時間 −10%');B(u.energy>=50,'探索時間 −10%',`開始前元気 ${u.energy} / 50以上`);break;
-    case 'モス娘':A(info.silphyActive>0,'追加消費だけ −50%（シルフィ20→10）','シルフィの追加消費が発生した場合。重複しても半減のまま（仮）');B(members.some(x=>name(x)!=='モス娘'&&tribe(x)==='虫'),'自身の防御力 +10%','モス娘以外の虫族がいる');break;
+    case 'モス娘':A(info.silphyActive>0||info.richActive?.length>0?true:names[0]==='フォレストリッチ'?'end':false,'アビリティ追加消費 −50%','シルフィ・フォレストリッチの追加消費に適用。複数でも半減は一度');B(members.some(x=>name(x)!=='モス娘'&&tribe(x)==='虫'),'自身の防御力 +10%','モス娘以外の虫族がいる');break;
     case 'エルフ':A(isTop(total,0),'探索時間 −10%','補正前の部隊攻撃力合計が最大');B(isTop(total,2)?'end':false,'終了時、自身の元気 +10','補正前の部隊魔法力合計が最大');break;
     case 'フクロウ娘':A(members.some(x=>x.energy<=50),'対象の攻撃・防御・魔法 +10%',`開始前元気50以下：${members.filter(x=>x.energy<=50).map(x=>`${members.indexOf(x)+1}番 ${name(x)}`).join('、')||'なし'}`);B(night(ts),'自身の攻撃・防御・魔法 +10%','18:00以上・翌06:00未満');break;
     case 'シルフィ':A(syl++<info.silphyActive,`先頭の元気 −${Math.ceil((n('モス娘')?10:20)*(1-cv(members[0]||{},'extra')/100))}（追加）／攻撃・魔法 +20%、防御 −20%`,'通常消費を確保した後、追加元気が足りる場合');B(true,'探索時間 −10%');break;
@@ -158,12 +168,19 @@ const ABILITY_ENGINE=(()=>{
     case 'ポダルゲ':{const luck=members.reduce((sum,x)=>sum+luckOf(x),0);A(luck>=50,'大成功率 +20ポイント',`合計幸運 ${luck} / 50以上`);B(info.duration<=96*minute,'大成功率 +15ポイント','最終探索時間96分以下');break;}
     case 'シルバースライム':A(info.grade>=2,'追加勧誘率 +20ポイント','到達度B以上');B(true,'探索時間 −20%');break;
     case 'メイドミノタウロス':A(info.grade>=4?'end':false,'10%でおいしいミルク1個','到達度S');B('end','部隊全員の元気 +7','大成功時');break;
+    case 'グリーンバット':A(stage.area==='森林','大成功率 +15ポイント','森林限定');B(tribeCount('アンデッド')>0,'大成功率 +15ポイント','アンデッド族がいる');break;
+    case 'シルキー':A('end','先頭の元気 +10（自身も対象）');B(info.silkyActive,'大成功率 +15ポイント','全シルキーの固有②を除いた大成功率50%以上');break;
+    case 'フォレストメイジ':A('end','元気最小の1人を50回復（自身含む・同率抽選）','大成功時・回復前の元気実数');B(true,'部隊全員の固有・カスタムによる回復量 +20%','アイテム・自然回復は対象外、複数加算');break;
+    case 'スリーピィ':A(first,'最大EPの1人を0にし、他のキャラのEP +35%',first&&info.sleepTarget!=null?`対象：${info.sleepTarget+1}番 ${names[info.sleepTarget]}（同率は編成順優先）`:'先頭配置');B(info.individualEP?.some(v=>v===0)?'end':false,'実効EP0のキャラの元気 +50','出発時の確定EPを参照');break;
+    case 'フォレストリッチ':A(info.richActive?.includes(u.uid)||false,`自身の元気 −${extraCost(members,u)}（追加）／大成功時報酬倍率 +30ポイント`,'通常消費とシルフィ分を確保した後に判定');B(first?'end':false,'他の1人から元気20（軽減可）を消費、自身の元気 +20','先頭・回復前元気50以下・軽減後の消費を支払える対象のみ');break;
+    case 'エビルアルラウネ':A(true,'大成功率 −5ポイント／到達度要求EP −5%','ボス条件は軽減しない');B(first,'全員の防御力 −5%／自身の攻撃力 +20%','先頭配置');break;
+    case 'フィッシャースライム':A('end','固有追加アイテム1個（探索セット50%、チケット20%、メダル20%、時計10%）','大成功時、通常ドロップと独立');B(info.grade>=0?'end':false,'基本勧誘率 +20ポイント','大成功時・D以上');break;
     case 'ヴァンパイア':A(true,'自身の通常消費元気 +100%／自身の実効EP +30%');B('end','自身の元気 +20','大成功時のみ');break;
    }
   }return result;
  }
  function recoverAtEnd(members,info,ts,great,rng=Math.random){
-  const energyBefore=Object.fromEntries(members.map(u=>[u.uid,u.energy]));const effects=[],outcomes=[];
+  const energyBefore=Object.fromEntries(members.map(u=>[u.uid,u.energy]));const effects=[],outcomes=[],costs=[];
   const pick=a=>a[Math.floor(rng()*a.length)];const add=(u,n,source)=>effects.push({uid:u.uid,amount:n,source});const miss=(u,reason)=>outcomes.push(`${members.indexOf(u)+1}番 ${name(u)}：${reason}`);
   const statsTotal=info.rawTotals||members.reduce((v,u)=>{baseStats(u).forEach((x,i)=>v[i]+=x);return v},[0,0,0]);
   for(const u of members){const n=name(u);
@@ -180,12 +197,19 @@ const ABILITY_ENGINE=(()=>{
    }
    if(n==='メイドデビル'){const others=members.filter(x=>x.uid!==u.uid);if(great&&others.length)add(pick(others),15,n);else miss(u,'固有② 大成功条件不成立')}
    if(n==='メイドミノタウロス'){if(great)members.forEach(x=>add(x,7,n));else miss(u,'固有② 大成功条件不成立')}
+   if(n==='シルキー'&&members.length)add(members[0],10,n);
+   if(n==='フォレストメイジ'){if(great){const min=Math.min(...members.map(x=>energyBefore[x.uid]));add(pick(members.filter(x=>energyBefore[x.uid]===min)),50,n+'①')}else miss(u,'固有① 大成功条件不成立')}
+   if(n==='スリーピィ'){const zero=members.filter((x,i)=>info.individualEP?.[i]===0);if(zero.length)zero.forEach(x=>add(x,50,n));else miss(u,'固有② 実効EP0の対象なし')}
+   if(n==='フォレストリッチ'&&u===members[0]){if(energyBefore[u.uid]<=50){const eligible=members.filter(x=>x!==u&&energyBefore[x.uid]>=extraCost(members,x));if(eligible.length){const x=pick(eligible),cost=extraCost(members,x);costs.push({uid:x.uid,amount:-cost,source:n+'②'});add(u,20,n+'②')}else miss(u,'固有② 追加元気を支払える対象なし')}else miss(u,'固有② 元気50以下の条件不成立')}
    if(n==='ヴァンパイア'){if(great)add(u,20,n);else miss(u,'固有② 大成功条件不成立')}
   }
   for(const c of info.customRecovery||[]){const u=members.find(x=>x.uid===c.uid);if(u){if(c.normal)add(u,c.normal,"カスタム：終了時回復");if(great&&c.great)add(u,c.great,"カスタム：大成功時回復")}}
+  const mageCount=count(members,'フォレストメイジ');
+  if(mageCount){for(const u of members){const total=effects.filter(e=>e.uid===u.uid).reduce((a,e)=>a+e.amount,0);const bonus=Math.floor(total*mageCount/5);if(bonus)add(u,bonus,'フォレストメイジ②（回復量強化）')}}
+  effects.push(...costs);
   if(["rest","luxRest"].includes(info.item))members.forEach(u=>add(u,info.item==="rest"?10:20,ITEMS[info.item].name));
   const sums={};effects.forEach(e=>sums[e.uid]=(sums[e.uid]||0)+e.amount);
-  members.forEach(u=>{u.energy=Math.min(maxEnergy(u),u.energy+(sums[u.uid]||0));u.regenAt=ts});
+  members.forEach(u=>{u.energy=Math.max(0,Math.min(maxEnergy(u),u.energy+(sums[u.uid]||0)));u.regenAt=ts});
   return {effects,outcomes,energyBefore,energyAfter:Object.fromEntries(members.map(u=>[u.uid,u.energy]))};
  }
  return {evaluate,recoverAtEnd,targetsForAlraune,statuses};
