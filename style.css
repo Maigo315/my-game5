@@ -289,3 +289,9 @@ html,body{touch-action:pan-x pan-y pinch-zoom}button,summary,.nav,.char,.member{
 .res-candidate>.res-card{width:100%;justify-content:flex-start}
 .res-candidate .char-name{min-height:2.4em;display:grid;place-items:center}
 .res-candidate-info{top:7px;right:5px;width:26px;height:26px;font-size:17px}
+
+/* v0.7.6.2: stable, centered level and energy rows in four-member slots. */
+.party-slot .slot-name{width:100%;min-height:2.4em;line-height:1.2;display:grid;place-items:center;text-align:center}
+.party-slot .slot-status{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:100%;text-align:center;line-height:1.2}
+.party-slot .slot-level,.party-slot .slot-energy{display:block;white-space:nowrap;max-width:100%}
+.party-slot .slot-level{font-weight:700}
