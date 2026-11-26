@@ -277,3 +277,15 @@ html,body{touch-action:pan-x pan-y pinch-zoom}button,summary,.nav,.char,.member{
 .res-no-candidates{grid-column:1/-1}
 .res-dialog .res-grid{gap:5px}.res-dialog .res-card{min-height:100px}
 @media(max-width:350px){.res-grid{gap:4px}.res-card{padding:4px 2px;font-size:10px}.res-card small{font-size:9px}.res-card b{font-size:11px}}
+
+/* v0.7.6.1: compact resonance indicators and aligned reference cards. */
+.res-level{white-space:nowrap}
+.portrait-level .res-level{color:#75529b}
+.char-art .res-art-mark{position:absolute;left:2px;bottom:2px;z-index:2;display:grid;place-items:center;width:17px;height:17px;padding:0;border:1px solid #c9b4df;border-radius:5px;background:#f5eafa;color:#68438e;font-size:15px;font-weight:800;line-height:1;box-shadow:0 1px 2px #0001}
+.res-top-grid .res-card{justify-content:flex-start;display:grid;grid-template-rows:auto minmax(2.4em,1fr) 25px;gap:4px;align-items:center;justify-items:center}
+.res-top-grid .char-name{min-height:2.4em;display:grid;place-items:center}
+.res-top-grid .res-card b{align-self:center;line-height:1.25}
+.res-candidate{position:relative;min-width:0;display:flex}
+.res-candidate>.res-card{width:100%;justify-content:flex-start}
+.res-candidate .char-name{min-height:2.4em;display:grid;place-items:center}
+.res-candidate-info{top:7px;right:5px;width:26px;height:26px;font-size:17px}
