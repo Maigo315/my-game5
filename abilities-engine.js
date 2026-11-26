@@ -15,8 +15,8 @@ const ABILITY_ENGINE=(()=>{
  const night=ts=>{const h=new Date(ts).getHours();return h>=18||h<6};
  function targetsForAlraune(members){
   const copies=count2(members,'アルラウネ');if(!copies)return [[]];
-  const min=Math.min(...members.map(u=>u.level));
-  const eligible=members.filter(u=>u.level===min).map(u=>u.uid);
+  const min=Math.min(...members.map(effectiveLevel));
+  const eligible=members.filter(u=>effectiveLevel(u)===min).map(u=>u.uid);
   let combos=[[]];for(let i=0;i<copies;i++)combos=combos.flatMap(path=>eligible.map(uid=>[...path,uid]));
   return combos;
  }
@@ -172,7 +172,7 @@ const ABILITY_ENGINE=(()=>{
     case '犬娘':A('end','追加報酬を1回抽選：拠点資材1（50%）、強化の石10（40%）、飛躍の石1（8%）、ご褒美チケット1（2%）');B(true,`自身の攻撃力 +${species}（固定値）`,`部隊の種族数 ${species}`);break;
     case 'フェアリー':A('end','部隊内の他の元気20以下の1人を50回復。対象なしなら不発');B(true,`大成功率 +${tribeCount('神秘')*4}ポイント`,`神秘族 ${tribeCount('神秘')}人`);break;
     case 'スライムベス娘':A(true,`自身の攻撃力 +${tribeCount('スライム')*5}%`,`スライム族 ${tribeCount('スライム')}人`);B(isTop(total,0),'大成功率 +10ポイント','補正前の部隊攻撃力合計が最大');break;
-    case 'アルラウネ':{A(true,'部隊全員の攻撃力 −5%／終了時、全員の元気 +5');const targets=(info.alrauneTargets||[]).slice(al,al+copies2(members,u)).map(id=>members.find(x=>x.uid===id)).filter(Boolean);al+=copies2(members,u);B(true,'最低Lvの1人の通常消費元気 −10',targets.length?`この計算例の対象：${targets.map(target=>`${members.indexOf(target)+1}番 ${name(target)}（Lv.${target.level}）`).join('、')}。出発時に抽選`:'最低Lvの対象を出発時に抽選');break;}
+    case 'アルラウネ':{A(true,'部隊全員の攻撃力 −5%／終了時、全員の元気 +5');const targets=(info.alrauneTargets||[]).slice(al,al+copies2(members,u)).map(id=>members.find(x=>x.uid===id)).filter(Boolean);al+=copies2(members,u);B(true,'最低Lvの1人の通常消費元気 −10',targets.length?`この計算例の対象：${targets.map(target=>`${members.indexOf(target)+1}番 ${name(target)}（Lv.${effectiveLevel(target)}）`).join('、')}。出発時に抽選`:'最低Lvの対象を出発時に抽選');break;}
     case 'ウサギ娘':A(true,'基本勧誘率 +5ポイント');B(!!stage.boss,'ボス基本勧誘率 +2ポイント','ボスのいる探索先');break;
     case 'ハーピー':A(true,'探索時間 −10%');B(u.energy>=50,'探索時間 −10%',`開始前元気 ${u.energy} / 50以上`);break;
     case 'モス娘':A(info.silphyActive>0||info.richActive?.length>0||info.carmillaActive?.length>0?true:names[0]==='フォレストリッチ'?'end':false,'アビリティ追加消費 −50%','シルフィ・フォレストリッチ・カーミラの追加消費に適用。複数でも半減は一度');B(members.some(x=>name(x)!=='モス娘'&&tribe(x)==='虫'),'自身の防御力 +10%','モス娘以外の虫族がいる');break;
