@@ -304,3 +304,6 @@ html,body{touch-action:pan-x pan-y pinch-zoom}button,summary,.nav,.char,.member{
 .farewell-dock button{min-width:0;min-height:44px;padding:8px 12px;white-space:nowrap;font-size:13px;}
 #farewell-count{white-space:nowrap;text-align:center;font-size:14px;}
 @media(max-width:350px){.farewell-dock button{padding:8px;font-size:12px}#farewell-count{font-size:12px}}
+
+/* Exploration item automation and trade details */
+.explore-item-open{width:100%;text-align:left}.item-auto-list{display:grid;gap:4px;margin:8px 0}.item-auto-option{display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #ded5c5}.item-auto-option input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:#8c674b}.item-auto-option span{min-width:0}.item-auto-option small{display:block;font-size:.8rem;color:inherit;opacity:.8}.trade-item-detail{background:transparent!important;color:inherit!important;border:0!important;box-shadow:none!important;text-align:left;padding:2px 0!important;font-weight:700;white-space:normal}.trade-item-detail:hover{text-decoration:underline}
