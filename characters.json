@@ -22,7 +22,8 @@
       "探索開始時、パーティの元気合計が300以上なら大成功率+10%。400以上ならさらに+10%。"
     ],
     "id": "c9",
-    "image": "assets/c9.webp"
+    "image": "assets/c9.webp",
+    "researchValue": 1
   },
   {
     "name": "ゴブリン娘",
@@ -47,7 +48,8 @@
       "強化の石獲得量+5%。"
     ],
     "id": "c4",
-    "image": "assets/c4.webp"
+    "image": "assets/c4.webp",
+    "researchValue": 2
   },
   {
     "name": "マイコニド",
@@ -72,7 +74,8 @@
       "森林または洞窟探索時、このキャラの消費元気-10。"
     ],
     "id": "c16",
-    "image": "assets/c16.webp"
+    "image": "assets/c16.webp",
+    "researchValue": 2
   },
   {
     "name": "犬娘",
@@ -97,7 +100,8 @@
       "このキャラの攻撃力+X。Xはパーティの種族数。"
     ],
     "id": "c23",
-    "image": "assets/c23.webp"
+    "image": "assets/c23.webp",
+    "researchValue": 2
   },
   {
     "name": "フェアリー",
@@ -122,7 +126,8 @@
       "パーティの神秘族のキャラの数×4%、大成功率に加算。"
     ],
     "id": "c14",
-    "image": "assets/c14.webp"
+    "image": "assets/c14.webp",
+    "researchValue": 2
   },
   {
     "name": "スライムベス娘",
@@ -147,7 +152,8 @@
       "パーティのステータス合計で最も高いものが攻撃力なら、大成功率+10%。"
     ],
     "id": "c8",
-    "image": "assets/c8.webp"
+    "image": "assets/c8.webp",
+    "researchValue": 2
   },
   {
     "name": "アルラウネ",
@@ -172,7 +178,8 @@
       "レベル最小のランダムなキャラ一人の消費元気-10。"
     ],
     "id": "c1",
-    "image": "assets/c1.webp"
+    "image": "assets/c1.webp",
+    "researchValue": 2
   },
   {
     "name": "ウサギ娘",
@@ -197,7 +204,8 @@
       "ボス基本勧誘率+2%。"
     ],
     "id": "c2",
-    "image": "assets/c2.webp"
+    "image": "assets/c2.webp",
+    "researchValue": 2
   },
   {
     "name": "ハーピー",
@@ -222,7 +230,8 @@
       "探索開始時、このキャラの元気が50以上なら、探索時間-10%。"
     ],
     "id": "c13",
-    "image": "assets/c13.webp"
+    "image": "assets/c13.webp",
+    "researchValue": 2
   },
   {
     "name": "モス娘",
@@ -247,7 +256,8 @@
       "パーティにモス娘以外の虫族がいるなら、このキャラの防御力+10%。"
     ],
     "id": "c17",
-    "image": "assets/c17.webp"
+    "image": "assets/c17.webp",
+    "researchValue": 2
   },
   {
     "name": "エルフ",
@@ -272,7 +282,8 @@
       "パーティのステータス合計で最も高いものが魔法力なら、探索終了時、このキャラの元気を10回復。"
     ],
     "id": "c3",
-    "image": "assets/c3.webp"
+    "image": "assets/c3.webp",
+    "researchValue": 2
   },
   {
     "name": "フクロウ娘",
@@ -297,7 +308,8 @@
       "18時〜6時に探索を開始する場合、このキャラの全てのステータス+10%。"
     ],
     "id": "c15",
-    "image": "assets/c15.webp"
+    "image": "assets/c15.webp",
+    "researchValue": 2
   },
   {
     "name": "シルフィ",
@@ -322,7 +334,8 @@
       "探索時間-10%。"
     ],
     "id": "c7",
-    "image": "assets/c7.webp"
+    "image": "assets/c7.webp",
+    "researchValue": 2
   },
   {
     "name": "ドリアード",
@@ -347,7 +360,8 @@
       "森林探索時、全ての植物族キャラの魔法力+20%。"
     ],
     "id": "c11",
-    "image": "assets/c11.webp"
+    "image": "assets/c11.webp",
+    "researchValue": 2
   },
   {
     "name": "ナメクジ娘",
@@ -372,7 +386,8 @@
       "探索開始時、このキャラの元気が100%なら、このキャラの防御力+30%。"
     ],
     "id": "c12",
-    "image": "assets/c12.webp"
+    "image": "assets/c12.webp",
+    "researchValue": 2
   },
   {
     "name": "ワーバット",
@@ -397,7 +412,8 @@
       "パーティにアンデッド族がいるなら、このキャラの魔法力+20%。"
     ],
     "id": "c19",
-    "image": "assets/c19.webp"
+    "image": "assets/c19.webp",
+    "researchValue": 2
   },
   {
     "name": "アラクネ",
@@ -422,7 +438,8 @@
       "虫族魔物娘の防御力+5%。"
     ],
     "id": "c0",
-    "image": "assets/c0.webp"
+    "image": "assets/c0.webp",
+    "researchValue": 2
   },
   {
     "name": "ゴーレム娘",
@@ -447,7 +464,8 @@
       "物質族魔物娘の防御力+5%。"
     ],
     "id": "c6",
-    "image": "assets/c6.webp"
+    "image": "assets/c6.webp",
+    "researchValue": 2
   },
   {
     "name": "デーモン",
@@ -472,7 +490,8 @@
       "探索終了時、元気0のキャラ一人の元気を20回復する。"
     ],
     "id": "c10",
-    "image": "assets/c10.webp"
+    "image": "assets/c10.webp",
+    "researchValue": 2
   },
   {
     "name": "ロイド",
@@ -497,7 +516,8 @@
       "探索終了時、このキャラの元気が50以下なら、このキャラの元気を20回復。(12時間に1度)"
     ],
     "id": "c18",
-    "image": "assets/c18.webp"
+    "image": "assets/c18.webp",
+    "researchValue": 2
   },
   {
     "name": "妖狐",
@@ -523,7 +543,8 @@
     ],
     "id": "c22",
     "image": "assets/c22.webp",
-    "subtribe": "妖狐"
+    "subtribe": "妖狐",
+    "researchValue": 2
   },
   {
     "name": "ゴースト娘",
@@ -548,7 +569,8 @@
       "先頭配置時、基本勧誘率-10%。探索時間-15%。"
     ],
     "id": "c5",
-    "image": "assets/c5.webp"
+    "image": "assets/c5.webp",
+    "researchValue": 2
   },
   {
     "name": "土偶娘",
@@ -573,7 +595,8 @@
       "物質族、アンデッド族の防御力+5%。"
     ],
     "id": "c21",
-    "image": "assets/c21.webp"
+    "image": "assets/c21.webp",
+    "researchValue": 2
   },
   {
     "name": "ヴァンパイア",
@@ -598,7 +621,8 @@
       "大成功時、このキャラの元気を20回復。"
     ],
     "id": "c20",
-    "image": "assets/c20.webp"
+    "image": "assets/c20.webp",
+    "researchValue": 2
   },
   {
     "name": "ラミア",
@@ -623,7 +647,8 @@
       "探索開始時、このキャラの元気が100以上なら、このキャラの攻撃力+10%。"
     ],
     "id": "c24",
-    "image": "assets/c24.webp"
+    "image": "assets/c24.webp",
+    "researchValue": 2
   },
   {
     "name": "メイドデビル",
@@ -648,7 +673,8 @@
       "大成功時、ランダムな他のキャラ一人の元気15回復。"
     ],
     "id": "c25",
-    "image": "assets/c25.webp"
+    "image": "assets/c25.webp",
+    "researchValue": 2
   },
   {
     "name": "ノーブルローズ",
@@ -673,7 +699,8 @@
       "先頭配置時、強化の石以外の通常報酬・通常アイテム抽選を無効化。強化の石獲得量+20%。固有能力・ボス報酬は対象外。"
     ],
     "id": "c26",
-    "image": "assets/c26.webp"
+    "image": "assets/c26.webp",
+    "researchValue": 2
   },
   {
     "name": "ミツバチ娘",
@@ -698,7 +725,8 @@
       "パーティに虫族が2体以上の場合、探索時間-10%。"
     ],
     "id": "c27",
-    "image": "assets/c27.webp"
+    "image": "assets/c27.webp",
+    "researchValue": 2
   },
   {
     "name": "ポダルゲ",
@@ -723,7 +751,8 @@
       "探索時間が通常の80%以下なら、大成功率+15%。"
     ],
     "id": "c28",
-    "image": "assets/c28.webp"
+    "image": "assets/c28.webp",
+    "researchValue": 2
   },
   {
     "name": "シルバースライム",
@@ -749,7 +778,8 @@
     ],
     "id": "c29",
     "image": "assets/c29.webp",
-    "recruitWeight": 0.2
+    "recruitWeight": 0.2,
+    "researchValue": 8
   },
   {
     "name": "メイドミノタウロス",
@@ -775,7 +805,8 @@
     ],
     "id": "c30",
     "image": "assets/c30.webp",
-    "boss": true
+    "boss": true,
+    "researchValue": 5
   },
   {
     "name": "グリーンバット",
@@ -800,7 +831,8 @@
       "パーティにアンデッド族がいるなら、大成功率+15%。"
     ],
     "id": "c31",
-    "image": "assets/c31.webp"
+    "image": "assets/c31.webp",
+    "researchValue": 2
   },
   {
     "name": "シルキー",
@@ -825,7 +857,8 @@
       "大成功率が50%以上なら、大成功率+15%。"
     ],
     "id": "c32",
-    "image": "assets/c32.webp"
+    "image": "assets/c32.webp",
+    "researchValue": 2
   },
   {
     "name": "フォレストメイジ",
@@ -850,7 +883,8 @@
       "パーティ全員の、アビリティによる元気回復量+20%。"
     ],
     "id": "c33",
-    "image": "assets/c33.webp"
+    "image": "assets/c33.webp",
+    "researchValue": 2
   },
   {
     "name": "スリーピィ",
@@ -875,7 +909,8 @@
       "探索終了時、実効EP0のキャラの元気を50回復。"
     ],
     "id": "c34",
-    "image": "assets/c34.webp"
+    "image": "assets/c34.webp",
+    "researchValue": 2
   },
   {
     "name": "フォレストリッチ",
@@ -900,7 +935,8 @@
       "先頭配置時、探索終了時、このキャラの元気が50以下なら、ランダムな他のキャラ一人の元気を20消費して、このキャラの元気を20回復。"
     ],
     "id": "c35",
-    "image": "assets/c35.webp"
+    "image": "assets/c35.webp",
+    "researchValue": 2
   },
   {
     "name": "エビルアルラウネ",
@@ -925,7 +961,8 @@
       "先頭配置時、全員の防御力-5%。このキャラの攻撃力+20%。"
     ],
     "id": "c36",
-    "image": "assets/c36.webp"
+    "image": "assets/c36.webp",
+    "researchValue": 2
   },
   {
     "name": "フィッシャースライム",
@@ -951,7 +988,8 @@
     ],
     "id": "c37",
     "image": "assets/c37.webp",
-    "boss": true
+    "boss": true,
+    "researchValue": 5
   },
   {
     "name": "ポイズンスライム娘",
@@ -976,7 +1014,8 @@
       "パーティ全員の幸運値合計が40以下なら、このキャラの防御力と魔法力+20%。"
     ],
     "id": "c38",
-    "image": "assets/c38.webp"
+    "image": "assets/c38.webp",
+    "researchValue": 2
   },
   {
     "name": "モモイロナメクジ",
@@ -1001,7 +1040,8 @@
       "探索開始時、全てのキャラの元気が80%以上なら、このキャラの防御力+40%。"
     ],
     "id": "c39",
-    "image": "assets/c39.webp"
+    "image": "assets/c39.webp",
+    "researchValue": 2
   },
   {
     "name": "ポイズンアラクネ",
@@ -1026,7 +1066,8 @@
       "元気が50%以下のキャラが2人以上いるなら、大成功率+15%。"
     ],
     "id": "c40",
-    "image": "assets/c40.webp"
+    "image": "assets/c40.webp",
+    "researchValue": 2
   },
   {
     "name": "ハンマーゴブリン",
@@ -1051,7 +1092,8 @@
       "大成功なら、強化の石獲得量+15%。"
     ],
     "id": "c41",
-    "image": "assets/c41.webp"
+    "image": "assets/c41.webp",
+    "researchValue": 2
   },
   {
     "name": "マッドゴーレム娘",
@@ -1076,7 +1118,8 @@
       "物質族魔物娘の攻撃力+5%。"
     ],
     "id": "c42",
-    "image": "assets/c42.webp"
+    "image": "assets/c42.webp",
+    "researchValue": 2
   },
   {
     "name": "サキュバット",
@@ -1101,7 +1144,8 @@
       "パーティにアンデッド族がいるなら、基本勧誘率+15%。"
     ],
     "id": "c43",
-    "image": "assets/c43.webp"
+    "image": "assets/c43.webp",
+    "researchValue": 2
   },
   {
     "name": "ミミック娘",
@@ -1126,7 +1170,8 @@
       "基本勧誘率-50ポイント。基本資源獲得量+30%。"
     ],
     "id": "c44",
-    "image": "assets/c44.webp"
+    "image": "assets/c44.webp",
+    "researchValue": 6
   },
   {
     "name": "テーラーアラクネ",
@@ -1152,7 +1197,8 @@
     ],
     "id": "c45",
     "image": "assets/c45.webp",
-    "boss": true
+    "boss": true,
+    "researchValue": 5
   },
   {
     "name": "レイヴン",
@@ -1177,7 +1223,8 @@
       "最終探索時間が80%以下なら、自身の攻撃力と魔法力+10%。"
     ],
     "id": "c46",
-    "image": "assets/c46.webp"
+    "image": "assets/c46.webp",
+    "researchValue": 2
   },
   {
     "name": "オーパーツ",
@@ -1202,7 +1249,8 @@
       "物質族全員の防御力+5%。"
     ],
     "id": "c47",
-    "image": "assets/c47.webp"
+    "image": "assets/c47.webp",
+    "researchValue": 2
   },
   {
     "name": "中級妖狐",
@@ -1228,7 +1276,8 @@
     ],
     "id": "c48",
     "image": "assets/c48.webp",
-    "subtribe": "妖狐"
+    "subtribe": "妖狐",
+    "researchValue": 2
   },
   {
     "name": "黒土偶",
@@ -1253,7 +1302,8 @@
       "最終探索時間が100%以上なら大成功率+5%。150%以上なら+25%。"
     ],
     "id": "c49",
-    "image": "assets/c49.webp"
+    "image": "assets/c49.webp",
+    "researchValue": 2
   },
   {
     "name": "枯木の精",
@@ -1278,7 +1328,8 @@
       "幸運値合計が40以下なら、自身の攻撃力+50%。"
     ],
     "id": "c50",
-    "image": "assets/c50.webp"
+    "image": "assets/c50.webp",
+    "researchValue": 2
   },
   {
     "name": "カーミラ",
@@ -1303,7 +1354,8 @@
       "勧誘成功時、自身の元気を20回復（1探索1回）。"
     ],
     "id": "c51",
-    "image": "assets/c51.webp"
+    "image": "assets/c51.webp",
+    "researchValue": 2
   },
   {
     "name": "シスターサキュバス",
@@ -1329,6 +1381,7 @@
     ],
     "id": "c52",
     "image": "assets/c52.webp",
-    "boss": true
+    "boss": true,
+    "researchValue": 5
   }
 ]

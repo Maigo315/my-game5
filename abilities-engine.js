@@ -89,7 +89,7 @@ const ABILITY_ENGINE=(()=>{
    addMod[0][2]+=.2*silphyActive;
   }
   if(members.length){const target=raw.findIndex(v=>v[2]===Math.max(...raw.map(x=>x[2])));addMod[target][2]+=.1*num('中級妖狐');}
-  let great=.2+(base.monument||0),recruit=.35,bossRecruit=.03,stoneMod=0,shorten=0;
+  let great=.2+(base.monument||0)+members.reduce((a,u)=>a+researchEffects(researchPoints(u.cid)).great/100,0),recruit=.35,bossRecruit=.03,stoneMod=0,shorten=0;
   const greatStoneMod=.15*num2('ハンマーゴブリン'),resourceMod=.3*num2('ミミック娘');
   const stoneOnly=names[0]==='ノーブルローズ';
   for(let i=0;i<members.length;i++){
@@ -127,7 +127,7 @@ const ABILITY_ENGINE=(()=>{
   if(duration<=96*minute)great+=.15*num2('ポダルゲ');
   if(duration>=120*minute)great+=(duration>=180*minute?.25:.05)*num2('黒土偶');
   great+=item==='zeal'?.3:0;if(item==='superZeal')great=1;
-  const silkyActive=great>=.5-1e-10; if(silkyActive)great+=.15*num2('シルキー');
+  const researchGreat=members.reduce((a,u)=>a+researchEffects(researchPoints(u.cid)).great,0);if(researchGreat)effects.push(`研究：大成功率＋${researchGreat}ポイント`);const silkyActive=great>=.5-1e-10; if(silkyActive)great+=.15*num2('シルキー');
   const rate=clamp(great,0,1);
   members.forEach((u,i)=>{if(name(u)==='レイヴン'&&duration<=96*minute){addMod[i][0]+=.1*copies2(members,u);addMod[i][2]+=.1*copies2(members,u);}if(name(u)==='枯木の精'&&rate<=.4+1e-10)addMod[i][2]+=1;});
   const adjusted=raw.map((v,i)=>v.map((x,k)=>(x+addFlat[i][k])*(1+addMod[i][k])));
@@ -140,7 +140,7 @@ const ABILITY_ENGINE=(()=>{
    const fraction=u.energy/maxEnergy(u), same=members.filter(x=>x.uid!==u.uid&&tribe(x)===tribe(u)).length;
    const unity=cv(u,'unity'),careful=cv(u,'careful');
    const customEP=cv(u,'ep')+cv(u,'areaEp',stage.area)+4*cv(u,'full')*fraction+5*cv(u,'low')*(1-fraction)+(unity?(unity+1)*same:0)+(same?0:3*cv(u,'solo'))+([0,3,5,8][careful]||0)*Math.max(0,-netShorten)*10;
-   value*=1+(innateEP+customEP)/100; individualEP.push(value); ep+=value;
+   const researchEP=researchEffects(researchPoints(u.cid)).ep;value*=1+(innateEP+customEP+researchEP)/100;if(researchEP)effects.push(`${name(u)}：研究 実効EP＋${researchEP}%`); individualEP.push(value); ep+=value;
   });
   const preSleepEP=individualEP.slice();let sleepTarget=null;
   if(names[0]==='スリーピィ'){sleepTarget=individualEP.indexOf(Math.max(...individualEP));individualEP.forEach((v,i)=>individualEP[i]=i===sleepTarget?0:v*1.35);ep=individualEP.reduce((a,b)=>a+b,0);effects.push(`スリーピィ：${sleepTarget+1}番 ${names[sleepTarget]} のEPを0、他のキャラのEP+35%`)}
