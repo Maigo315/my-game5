@@ -29,6 +29,7 @@ const ABILITY_ENGINE=(()=>{
   const poison=num("ポイズンスライム娘")+num("ポイズンアラクネ");
   const addMod=raw.map(()=>[0,0,0]),addFlat=raw.map(()=>[0,0,0]);
   const effects=[],snapshotEnergy=members.map(u=>u.energy);
+  const owlLow=members.map((u,i)=>snapshotEnergy[i]/maxEnergy(u)<=.5);
   const scorpionActive=num("スコーピオン")>0&&!base.skipScorpion&&evaluate(members,stage,ts,alrauneTargets,{...base,skipScorpion:true}).normalDropRate>=.7-1e-10;
   const extraEvents=[],sandTargets={},magmaTargets={};
   const abilityCount=num('アラクネ'),ghostCount=num('ゴースト娘');
@@ -66,9 +67,9 @@ const ABILITY_ENGINE=(()=>{
     duration>=132*minute||num('マイコニド')>0||num2('ゴーレム娘')>0||num2('オーパーツ')>0||num2('土偶娘')>0||
     (totals[2]*5>=totals.reduce((a,b)=>a+b,0)*2&&num2('カーバンクル娘')>0)||
     (members.some(x=>tribe(x)==='水棲')&&num2('マリンゴースト')>0)||
-    (snapshotEnergy[i]<=50&&num('フクロウ娘')>0)||
+    (owlLow[i]&&num('フクロウ娘')>0)||
     (i===0&&raw[0].indexOf(Math.max(...raw[0]))===1&&(num('デーモン')+num('テーラーアラクネ')>0))));
-  const basicCosts=members.map(u=>Math.ceil(Math.max(0,20*(1+abilityCount*.1+ghostCount*.2+.5*num('シスターサキュバス')+(name(u)==='ヴァンパイア'?1:0)+.5*(poison-(['ポイズンスライム娘','ポイズンアラクネ'].includes(name(u))?1:0)))
+  const basicCosts=members.map(u=>Math.ceil(Math.max(0,20*(1+(abilityCount+ghostCount)*.3+.5*num('シスターサキュバス')+(name(u)==='ヴァンパイア'?1:0)+.5*(poison-(['ポイズンスライム娘','ポイズンアラクネ'].includes(name(u))?1:0)))
    -(tribe(u)==='獣'?2*num('フェンリル'):0)-(name(u)==='マイコニド'&&['森林','洞窟'].includes(stage.area)?10*copies2(members,u):0)
    -(metalActive[members.indexOf(u)]?5*copies2(members,u):0)-(names[0]==="セイレーン"?4:0)-10*actualAl.filter(id=>id===u.uid).length-cv(u,"basic")-(name(u)==="ランスリザード"&&u.energy/maxEnergy(u)<=.5?5:0))));
   const afterBasic=members.map((u,i)=>u.energy-basicCosts[i]);
@@ -139,7 +140,7 @@ const ABILITY_ENGINE=(()=>{
    if(names[i]==='デュラハン')addMod[dullahanTarget][0]+=.1;
    if(names[i]==='メイドスキュラ'&&maidTargets[i]>=0){const j=maidTargets[i];addMod[j][raw[j][0]>=raw[j][2]?0:2]+=.12;}
   }
-  for(const u of members){if(name(u)==='フクロウ娘')members.forEach((x,i)=>{if(snapshotEnergy[i]<=50)addMod[i]=addMod[i].map(v=>v+.1)})}
+  for(const u of members){if(name(u)==='フクロウ娘')members.forEach((x,i)=>{if(owlLow[i])addMod[i]=addMod[i].map(v=>v+.1)})}
   // 最も高い能力が同値なら、攻撃→防御→魔法の順で1つ選ぶ（仮ルール）。
   if(members.length){
    const lead=raw[0],index=lead.indexOf(Math.max(...lead));
@@ -249,17 +250,17 @@ const ABILITY_ENGINE=(()=>{
     case 'ハーピー':A(true,'探索時間 −10%');B(u.energy>=50,'探索時間 −10%',`開始前元気 ${u.energy} / 50以上`);break;
     case 'モス娘':A(info.extraActive||info.silphyActive>0||info.richActive?.length>0||info.carmillaActive?.length>0?true:names[0]==='フォレストリッチ'?'end':false,'アビリティ追加消費 −50%','シルフィ・フォレストリッチ・カーミラ・熱砂の触手・マグマスラッグの追加消費に適用。複数でも半減は一度');B(members.some(x=>name(x)!=='モス娘'&&tribe(x)==='虫'),'自身の防御力 +10%','モス娘以外の虫族がいる');break;
     case 'エルフ':A(isTop(total,0),'探索時間 −10%','補正前の部隊攻撃力合計が最大');B(isTop(total,2)?'end':false,'終了時、自身の元気 +10','補正前の部隊魔法力合計が最大');break;
-    case 'フクロウ娘':A(members.some(x=>x.energy<=50),'対象の攻撃・防御・魔法 +10%',`開始前元気50以下：${members.filter(x=>x.energy<=50).map(x=>`${members.indexOf(x)+1}番 ${name(x)}`).join('、')||'なし'}`);B(night(ts),'自身の攻撃・防御・魔法 +10%','18:00以上・翌06:00未満');break;
+    case 'フクロウ娘':A(members.some(x=>x.energy/maxEnergy(x)<=.5),'対象の攻撃・防御・魔法 +10%',`開始前元気50%以下：${members.filter(x=>x.energy/maxEnergy(x)<=.5).map(x=>`${members.indexOf(x)+1}番 ${name(x)}`).join('、')||'なし'}`);B(night(ts),'自身の攻撃・防御・魔法 +10%','18:00以上・翌06:00未満');break;
     case 'シルフィ':A(syl++<info.silphyActive,`先頭の元気 −${Math.ceil((n('モス娘')?10:20)*(1-cv(members[0]||{},'extra')/100))}（追加）／攻撃・魔法 +20%、防御 −20%`,'通常消費を確保した後、追加元気が足りる場合');B(true,'探索時間 −10%');break;
     case 'ドリアード':A(stage.area==='森林','大成功率 +20ポイント','森林限定');B(stage.area==='森林','部隊内の植物族の魔法力 +20%','森林限定');break;
     case 'ナメクジ娘':A('end','50%の確率で自身の元気 +20');B(u.energy===maxEnergy(u),'自身の防御力 +30%',`開始前元気 ${u.energy} / ${maxEnergy(u)}（満タン条件）`);break;
     case 'ワーバット':A(stage.area==='洞窟','自身の魔法力 +50%','洞窟限定');B(tribeCount('アンデッド')>0,'自身の魔法力 +20%','部隊にアンデッド族がいる');break;
-    case 'アラクネ':A(true,'部隊全員の通常消費元気 +10%／探索時間 −15%');B(true,'部隊内の虫族の防御力 +5%');break;
+    case 'アラクネ':A(true,'部隊全員の通常消費元気 +30%／探索時間 −15%');B(true,'部隊内の虫族の防御力 +5%');break;
     case 'ゴーレム娘':A(first,'自身の防御力 +10%','先頭配置');B(true,'部隊内の物質族の防御力 +5%');break;
     case 'デーモン':A(true,`先頭の${['攻撃力','防御力','魔法力'][raw[0].indexOf(Math.max(...raw[0]))]} +10%`,'先頭の補正前最大ステータス（同率は攻撃→防御→魔法）');B('end','部隊内の元気0の1人を20回復（自身も対象）');break;
     case 'ロイド':A('end','部隊全員の元気 +10','個体・能力別12時間制限');B('end','自身の元気 +20','終了時元気50以下、個体・能力別12時間制限');break;
     case '妖狐':A(first,'強化の石獲得量 −10%／基本勧誘率 +10ポイント','先頭配置');B(species>=4||foxOnly(members),'大成功率 +10ポイント',`4種族以上（現在${species}）または妖狐のみ`);break;
-    case 'ゴースト娘':A(true,'部隊全員の通常消費元気 +20%／探索時間 −15%');B(first,'基本勧誘率 −10ポイント／探索時間 −15%','先頭配置');break;
+    case 'ゴースト娘':A(true,'部隊全員の通常消費元気 +30%／探索時間 −15%');B(first,'基本勧誘率 −10ポイント／探索時間 −15%','先頭配置');break;
     case '土偶娘':A(first,'部隊実効EP −10%／大成功率 +15ポイント','先頭配置');B(true,'部隊内の物質・アンデッド族の防御力 +5%');break;
     case 'ラミア':A(members.some(x=>maxEnergy(x)<100),'自身の実効EP +8%','最大元気100未満の仲間がいる');B(u.energy>=100,'自身の攻撃力 +10%',`開始前元気 ${u.energy} / 100以上`);break;
     case 'メイドデビル':A(true,`強化の石獲得量 +${species*3}%`,`部隊の種族数 ${species}`);B('end','他のランダムな1人を15回復','大成功時');break;
