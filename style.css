@@ -307,3 +307,5 @@ html,body{touch-action:pan-x pan-y pinch-zoom}button,summary,.nav,.char,.member{
 
 /* Exploration item automation and trade details */
 .explore-item-open{width:100%;text-align:left}.item-auto-list{display:grid;gap:4px;margin:8px 0}.item-auto-option{display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #ded5c5}.item-auto-option input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:#8c674b}.item-auto-option span{min-width:0}.item-auto-option small{display:block;font-size:.8rem;color:inherit;opacity:.8}.trade-item-detail{background:transparent!important;color:inherit!important;border:0!important;box-shadow:none!important;text-align:left;padding:2px 0!important;font-weight:700;white-space:normal}.trade-item-detail:hover{text-decoration:underline}
+
+.char-art .tribe-icon.multi-tribe{width:auto;min-width:18px;padding:1px 3px;white-space:nowrap;}
