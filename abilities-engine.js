@@ -1,5 +1,5 @@
 'use strict';
-/* v0.6.2: 96種の固有能力192枠。ゲーム固有の端数・同率処理は README の仮ルール参照。 */
+/* v0.9.0-alpha.3: 103種の固有能力206枠。ゲーム固有の端数・同率処理は README の仮ルール参照。 */
 const ABILITY_ENGINE=(()=>{
  const minute=60000;
  const count=(members,n)=>members.filter(u=>ch(u.cid).name===n).length;
@@ -52,6 +52,8 @@ const ABILITY_ENGINE=(()=>{
   }
   const scorpionActive=num('スコーピオン')>0&&(base.dropRef||0)>=.7-1e-10;
   const hellBonus=Math.max(0,(base.dropRef||0)-.5),topazActive=!!base.topazActive;
+  const yinAttack=totals[0]>totals[2]+1e-10,yinMagic=totals[2]>totals[0]+1e-10;
+  const lowMagic=totals.reduce((a,b)=>a+b,0)>0&&totals[2]*5<=totals.reduce((a,b)=>a+b,0)+1e-10;
   const amp=1+.5*num('コスモノーム'); // 固有の正の補正のみ
   const maxTotal=members.reduce((a,u)=>a+maxEnergy(u),0),lowMaxCount=members.filter(u=>maxEnergy(u)<100).length;
   const insectCount=members.filter(u=>has(u,'虫')).length;
@@ -78,10 +80,15 @@ const ABILITY_ENGINE=(()=>{
    if(n==='セイレーン'&&members.some(x=>x!==u&&anyTribe(x,['ハーピー','水棲']))){shorten+=.1*k2;}
    if(n==='デックアールヴ')shorten-=.1*k2;
    if(n==='フレイルナイト')shorten-=.2;
+   if(n==='クラッシャー'&&i===0)shorten-=.2*k2;
+   if(n==='陰陽百足'){if(yinAttack)shorten-=.5;if(yinMagic)shorten+=.5*k2;}
    if(n==='クィーンハーピー'&&i===0)shorten+=.4;
    if(n==='スコーピオン'&&scorpionActive)shorten+=.15*k2;
   }
   shorten+=(sum('fast')-sum('slow'))/100+(item==='speed'?.3:item==='slow'?-.3:0);
+  const barbarianTimeRef=1-clamp(shorten,-.5,.75);
+  const barbarianActive=barbarianTimeRef>=1.1-1e-10;
+  if(barbarianActive)shorten-=.2*num2('バーバリアン');
   const netShorten=clamp(shorten,-.5,.75),duration=Math.round(120*minute*(1-netShorten)/1000)*1000;
   const rawEP=raw.map(v=>v.reduce((a,b)=>a+b,0));
   const roseTargets=members.map((u,i)=>members.filter((x,j)=>i!==j&&rawEP[j]<rawEP[i]).map(x=>x.uid));
@@ -98,11 +105,12 @@ const ABILITY_ENGINE=(()=>{
   const basicCosts=members.map((u,i)=>{
    if(i===minervaTarget)return 0;
    // 元の加算順を維持し、既存編成での端数境界を変えない。
-   const factor=name(u)==='エメラルド'?1:1+(abilityCount+ghostCount)*.3+.5*num('シスターサキュバス')+(name(u)==='ヴァンパイア'?1:0)+.5*(poison-(['ポイズンスライム娘','ポイズンアラクネ'].includes(name(u))?1:0));
+   const factor=name(u)==='エメラルド'?1:1+(abilityCount+ghostCount)*.3+.5*num('シスターサキュバス')+(name(u)==='ヴァンパイア'?1:0)+.5*(poison-(['ポイズンスライム娘','ポイズンアラクネ'].includes(name(u))?1:0))+.5*(num('テンタクル')+num('シャグマタンゴ')-(['テンタクル','シャグマタンゴ'].includes(name(u))?1:0));
    return Math.ceil(Math.max(0,20*factor
    -(has(u,'獣')?2*num('フェンリル'):0)-(name(u)==='マイコニド'&&['森林','洞窟'].includes(stage.area)?10*copies2(members,u):0)
    -(metalActive[i]?5*copies2(members,u):0)-(names[0]==="セイレーン"?4:0)-10*actualAl.filter(id=>id===u.uid).length-cv(u,"basic")-(name(u)==="ランスリザード"&&u.energy/maxEnergy(u)<=.5?5:0)-(name(u)==='ファンガスタ'&&base.fungastaActive?10:0))*(name(u)==='トパーズ'&&topazActive?.5:1));
   });
+  const tentacleActive=basicCosts.some(c=>c>=40);
   const afterBasic=members.map((u,i)=>u.energy-basicCosts[i]);
   const silphyExtra=extraCost(members,members[0]||{});
   let silphyActive=0, silphyCost=0;
@@ -176,6 +184,9 @@ const ABILITY_ENGINE=(()=>{
    if(n==='キラールビー'&&u.energy/maxEnergy(u)<=.4)mod[0]+=(.6*k2)*amp;
    if(n==='メタルゴーレム娘'&&duration>=132*minute)mod[1]+=(.3)*amp;
    if(n==='フレイルナイト'&&duration>=180*minute)mod[0]+=(.4*k2)*amp;
+   if(lowMagic)mod[0]+=.12*num('アシュラ')*amp;
+   if(n==='バーバリアン'){if(j===0)mod[0]+=.4*amp;if(barbarianActive)mod[0]+=.3*k2*amp;}
+   if(n==='クラッシャー'&&j===0)mod[0]+=.5*k2*amp;
   }
   for(let i=0;i<members.length;i++){
    if(names[i]==='デュラハン')addMod[dullahanTarget][0]+=(.1)*amp;
@@ -194,7 +205,7 @@ const ABILITY_ENGINE=(()=>{
   }
   if(members.length){const target=raw.findIndex(v=>v[2]===Math.max(...raw.map(x=>x[2])));addMod[target][2]+=(.1*num('中級妖狐'))*amp;}
   let great=.2+(base.monument||0)+members.reduce((a,u)=>a+researchEffects(researchPoints(u.cid)).great/100,0),recruit=.35,bossRecruit=.03,stoneMod=0;
-  const greatStoneMod=.15*num2('ハンマーゴブリン'),resourceMod=.3*num2('ミミック娘')+(maxTotal<=250?.5*num2('トパーズ'):0);
+  const greatStoneMod=.15*num2('ハンマーゴブリン'),resourceMod=.3*num2('ミミック娘')+(maxTotal<=250?.5*num2('トパーズ'):0)-.5*num2('イーター');
   const stoneOnly=names[0]==='ノーブルローズ';
   for(let i=0;i<members.length;i++){
    const u=members[i],n=name(u),k2=copies2(members,u);
@@ -223,6 +234,10 @@ const ABILITY_ENGINE=(()=>{
    if(n==='ヴィーラ'&&isTop(totals,2))bossRecruit+=.02*k2;
    if(n==='マーメイド')recruit+=(members.filter(x=>has(x,'水棲')).length>=2?.1:.05)*k2;
    if(n==='マリンゴースト')great-=.1;
+   if(n==='テンタクル')great+=.25;
+   if(n==='バーバリアン'&&i===0)stoneMod-=.2;
+   if(n==='シャグマタンゴ')recruit-=.3;
+   if(n==='イーター')great+=.5*k2;
    if(n==='ピンクスライム娘')recruit+=.15;
    if(n==='マリアンヌ')great+=.3;
    if(n==='ミネルヴァ'&&night(ts))great+=.2*k2;
@@ -234,8 +249,9 @@ const ABILITY_ENGINE=(()=>{
   great+=sum('great')/100+members.reduce((a,u)=>{const q=cv(u,'quick'),c=cv(u,'careful');return a+(q?(.5+.5*q)*Math.max(0,netShorten)*10:0)+(c?(c+1)*Math.max(0,-netShorten)*10:0)},0)/100;
   if(duration<=96*minute)great+=.15*num2('ポダルゲ');
   if(duration>=120*minute)great+=(duration>=180*minute?.25:.05)*num2('黒土偶');
-  const thresholdFactor=1-(sum('threshold')+5*num('ポイズンスライム娘')+5*num('エビルアルラウネ')+((species>=4||foxOnly(members))?5*num2('中級妖狐'):0)+(item==='cheat'?20:0)+(isTop(totals,0)?5*num('ヴィーラ'):0)+(duration>=132*minute?5*num2('スノーラミア'):0)-(names[0]==='カーバンクル娘'?5:0)-(names[0]==='パイレーツ'?10:0)-10*num2("デックアールヴ")+8*num("フレイルナイト")+(luck>=60?5*num('テンプハニー'):0)-(names[0]==='クィーンハーピー'?10:0))/100;
-  if(thresholdFactor>=1.1-1e-10)great+=.2*num2("デュラハン");
+  const thresholdFactor=1-(sum('threshold')+5*num('ポイズンスライム娘')+5*num('エビルアルラウネ')+((species>=4||foxOnly(members))?5*num2('中級妖狐'):0)+(item==='cheat'?20:0)+(isTop(totals,0)?5*num('ヴィーラ'):0)+(duration>=132*minute?5*num2('スノーラミア'):0)-(names[0]==='カーバンクル娘'?5:0)-(names[0]==='パイレーツ'?10:0)-10*num2("デックアールヴ")+8*num("フレイルナイト")+(luck>=60?5*num('テンプハニー'):0)-(names[0]==='クィーンハーピー'?10:0)-(names[0]==='クラッシャー'?20*copies2(members,members[0]):0)+(names[0]==='イーター'?10:0))/100;
+  if(thresholdFactor>=1.1-1e-10)great+=.2*num2("デュラハン")+.2*num2("アシュラ");
+  if(thresholdFactor>=1.5-1e-10)members.forEach((u,i)=>{if(name(u)==='クラッシャー')addMod[i][0]+=.5*amp;});
   great+=item==='zeal'?.3:0;if(item==='superZeal')great=1;
   const researchGreat=members.reduce((a,u)=>a+researchEffects(researchPoints(u.cid)).great,0);if(researchGreat)effects.push(`研究：大成功率＋${researchGreat}ポイント`);const silkyActive=great>=.5-1e-10; if(silkyActive)great+=.15*num2('シルキー');
   const rate=clamp(great,0,1);
@@ -255,7 +271,7 @@ const ABILITY_ENGINE=(()=>{
    const fraction=u.energy/maxEnergy(u), same=members.filter(x=>x.uid!==u.uid&&anyTribe(x,tribes(u))).length;
    const unity=cv(u,'unity'),careful=cv(u,'careful');
    const customEP=cv(u,'ep')+cv(u,'areaEp',stage.area)+4*cv(u,'full')*fraction+5*cv(u,'low')*(1-fraction)+(unity?(unity+1)*same:0)+(same?0:3*cv(u,'solo'))+([0,3,5,8][careful]||0)*Math.max(0,-netShorten)*10;
-   const newEP=(name(u)==='ピンクスライム娘'?pinkBonus*copies2(members,u)*amp:0)+(name(u)==='ヘルハウンド'&&i===0?10*amp:0)+(name(u)==='ヴリトラ'?20*lowMaxCount*amp:0)-(maxEnergy(u)<100?10*num('ヴリトラ'):0)+(name(u)==='クィーンハーピー'&&duration===30*minute?50*copies2(members,u)*amp:0)+(luck>=100?15*(num('ファンガスタ')-(name(u)==='ファンガスタ'?1:0))*amp:0)-(i===minervaTarget?50:0);
+   const newEP=(name(u)==='ピンクスライム娘'?pinkBonus*copies2(members,u)*amp:0)+(name(u)==='ヘルハウンド'&&i===0?10*amp:0)+(name(u)==='ヴリトラ'?20*lowMaxCount*amp:0)-(maxEnergy(u)<100?10*num('ヴリトラ'):0)+(name(u)==='クィーンハーピー'&&duration===30*minute?50*copies2(members,u)*amp:0)+(luck>=100?15*(num('ファンガスタ')-(name(u)==='ファンガスタ'?1:0))*amp:0)-(i===minervaTarget?50:0)+(name(u)==='テンタクル'&&tentacleActive?50*copies2(members,u)*amp:0);
    const researchEP=researchEffects(researchPoints(u.cid)).ep;value*=1+((innateEP>0?innateEP*amp:innateEP)+newEP+customEP+researchEP)/100;if(researchEP)effects.push(`${name(u)}：研究 実効EP＋${researchEP}%`); individualEP.push(value); ep+=value;
   });
   // シーアイドル：全員が同じ変更前スナップショットを参照。移譲分に個別倍率を再適用しない。
@@ -269,14 +285,14 @@ const ABILITY_ENGINE=(()=>{
   const marianneTargets=members.map((u,i)=>{if(name(u)!=='マリアンヌ')return null;let j=-1;for(let k=0;k<members.length;k++)if(k!==i&&(j<0||individualEP[k]>individualEP[j]))j=k;return j<0?null:members[j].uid;});
   const frostMin=members.filter((u,i)=>name(u)==='樹氷の精'&&individualEP[i]<=Math.min(...individualEP)+1e-10);
   const frostReward=25*frostMin.reduce((a,u)=>a+copies2(members,u),0);
-  ep*=1+.1*num('ポイズンアラクネ')*amp-(names[0]==='土偶娘'?.1:0)-(names[0]==='セイレーン'&&duration>60*minute?.1:0);
+  ep*=1+.1*num('ポイズンアラクネ')*amp+(yinAttack?.15*num('陰陽百足')*amp:0)-(names[0]==='土偶娘'?.1:0)-(names[0]==='セイレーン'&&duration>60*minute?.1:0);
   if(item==='support')ep*=1.1;
-  const bossReduction=Math.min(.5,(item==='hunt'?.1:0)+.05*num('キラールビー')+(eternityHigh?.05*num2('エタニティ'):0)+(names[0]==='カーバンクル娘'?.05:0)+(isTop(totals,2)?.05*num2('ヴィーラ'):0)+.05*members.reduce((a,u)=>a+(name(u)==='ドラゴン娘'&&u.energy===maxEnergy(u)?copies2(members,u):0),0));
+  const bossReduction=Math.min(.5,(item==='hunt'?.1:0)+.05*num('キラールビー')+(eternityHigh?.05*num2('エタニティ'):0)+.12*num('シャグマタンゴ')-(yinMagic?.15*num2('陰陽百足'):0)+(names[0]==='カーバンクル娘'?.05:0)+(isTop(totals,2)?.05*num2('ヴィーラ'):0)+.05*members.reduce((a,u)=>a+(name(u)==='ドラゴン娘'&&u.energy===maxEnergy(u)?copies2(members,u):0),0));
   const grade=stage.thresholds.reduce((g,t,i)=>ep>=t*thresholdFactor?i:g,-1);
   bossRecruit+=sum('boss')/100+luck*.0001;stoneMod+=sum('stone')/100;
-  const fisherCount=num2('フィッシャースライム'),normalDropRate=stoneOnly||grade<0?0:clamp(.1*(grade+1)+.3*num('ミミック娘')+.1*num('スコーピオン')+pirateBonus,0,1),greatRecruit=grade<0?0:clamp(recruit+.2*fisherCount,0,1);
-  const additionalRecruit=grade<0?0:clamp([0,.05,.1,.15,.2][grade]+(grade>=2?.2*num('シルバースライム'):0)+sum('additional')/100+luck*.001+(names[0]==='スキュラ'?.3:0)+(grade>=2?.05*num2('シーアイドル'):0)+(grade>=2&&insectCount>=2?(insectCount>=3?.30:.15)*num2('テンプハニー'):0),0,1);
-  return {amp,minervaTarget,eternityHigh,cosmoTribeCount,luckValues,fungastaRecovery,fungastaActive:!!base.fungastaActive,fungastaLuckRef:base.fungastaLuckRef,tropicalActive:!!base.tropicalActive,tropicalGreatRef:base.tropicalGreatRef,recruitBeforeGrade:clamp(recruit,0,1),pinkBonus,hellBonus,dropRef:base.dropRef||0,topazActive,topazGreatRef:base.topazGreatRef,maxTotal,lowMaxCount,marianneTargets,roseTargets,roseActive,metalActive,dullahanTarget,maidTargets,zeroDef,defCheck,pirateActive,idolActive,idolTransfers,preIdolEP,bossReduction,extraEvents,extraCount,extraActive,sandTargets,magmaTargets,scorpionActive,ep:Math.floor(ep),rawEp:ep,individualEP,preSleepEP,sleepTarget,silkyActive,richActive,carmillaActive,baseLuck,luck,fisherCount,greatRecruit,grade,thresholdFactor,rate,additionalRecruit,stoneOnly,recruit:grade<0?0:clamp(recruit,0,1),bossRecruit:clamp(bossRecruit,0,1),greatBossRecruit:clamp(bossRecruit+.03*num2('ホワイトバニー'),0,1),frostReward,stoneMod,greatStoneMod,resourceMod:resourceMod+(duration>=132*minute?(duration>=180*minute?.6:.3)*num2("ウミウシヒメ"):0),normalDropRate,normalDropBonus:.3*num('ミミック娘')+.1*num('スコーピオン')+pirateBonus,materialMod:sum('material')/100,greatMultiplier:1.5+(sum('greatReward')+30*richActive.length+30*num("マリンゴースト")+25*num2("ナイトローズ")+50*num('シスターサキュバス')+frostReward+(night(ts)?25*num2('ミネルヴァ'):0))/100,item,customRecovery:members.map(u=>({uid:u.uid,normal:cv(u,'recover'),great:cv(u,'greatRecover')})),
+  const fisherCount=num2('フィッシャースライム'),normalDropRate=stoneOnly||grade<0?0:clamp(.1*(grade+1)+.3*num('ミミック娘')+.1*num('スコーピオン')+pirateBonus-(names[0]==='イーター'?1:0),0,1),greatRecruit=grade<0?0:clamp(recruit+.2*fisherCount,0,1);
+  const additionalRecruit=grade<0?0:clamp([0,.05,.1,.15,.2][grade]+(grade>=2?.2*num('シルバースライム'):0)+sum('additional')/100+luck*.001+(names[0]==='スキュラ'?.3:0)+(grade>=2?.05*num2('シーアイドル'):0)+(grade>=2&&insectCount>=2?(insectCount>=3?.30:.15)*num2('テンプハニー'):0)-.3*num('シャグマタンゴ'),0,1);
+  return {yinAttack,yinMagic,lowMagic,barbarianActive,barbarianTimeRef,tentacleActive,amp,minervaTarget,eternityHigh,cosmoTribeCount,luckValues,fungastaRecovery,fungastaActive:!!base.fungastaActive,fungastaLuckRef:base.fungastaLuckRef,tropicalActive:!!base.tropicalActive,tropicalGreatRef:base.tropicalGreatRef,recruitBeforeGrade:clamp(recruit,0,1),pinkBonus,hellBonus,dropRef:base.dropRef||0,topazActive,topazGreatRef:base.topazGreatRef,maxTotal,lowMaxCount,marianneTargets,roseTargets,roseActive,metalActive,dullahanTarget,maidTargets,zeroDef,defCheck,pirateActive,idolActive,idolTransfers,preIdolEP,bossReduction,extraEvents,extraCount,extraActive,sandTargets,magmaTargets,scorpionActive,ep:Math.floor(ep),rawEp:ep,individualEP,preSleepEP,sleepTarget,silkyActive,richActive,carmillaActive,baseLuck,luck,fisherCount,greatRecruit,grade,thresholdFactor,rate,additionalRecruit,stoneOnly,recruit:grade<0?0:clamp(recruit,0,1),bossRecruit:clamp(bossRecruit,0,1),greatBossRecruit:clamp(bossRecruit+.03*num2('ホワイトバニー'),0,1),frostReward,stoneMod,greatStoneMod,resourceMod:resourceMod+(duration>=132*minute?(duration>=180*minute?.6:.3)*num2("ウミウシヒメ"):0),normalDropRate,normalDropBonus:.3*num('ミミック娘')+.1*num('スコーピオン')+pirateBonus-(names[0]==='イーター'?1:0),materialMod:sum('material')/100,greatMultiplier:1.5+(sum('greatReward')+30*richActive.length+30*num("マリンゴースト")+25*num2("ナイトローズ")+50*num('シスターサキュバス')+frostReward+(night(ts)?25*num2('ミネルヴァ'):0))/100,item,customRecovery:members.map(u=>({uid:u.uid,normal:cv(u,'recover'),great:cv(u,'greatRecover')})),
    shorten:netShorten,duration,rawTotals:totals,adjusted,raw,basicCosts,extraCosts,costs:allCosts,
    alrauneTargets:actualAl,alrauneCandidates:allowedAl,silphyActive,canStart,abilityLog:effects};
  }
@@ -385,6 +401,13 @@ const ABILITY_ENGINE=(()=>{
     case 'ミネルヴァ': A(first&&info.minervaTarget>=0,`${(info.minervaTarget??-1)+1}番の通常消費0・個別EP −50%`,'開始前の他の元気実数最小（同率編成順）');B(night(ts),'大成功率 +20ポイント／大成功報酬倍率 +25ポイント','18時以上・翌6時未満');break;
     case 'エタニティ': A('end','全員の元気を最大まで回復','終了時元気20未満の仲間がいる・個体ごとに24時間');B(info.eternityHigh,'大成功率 +25ポイント／ボス討伐要求EP −5%','開始前の合計元気が合計最大元気の80%以上');break;
     case 'コスモノーム': A(true,'正の固有ステータス・EP上昇量 ×1.5','固定加算も対象、負補正・カスタム・研究等は対象外');B(info.cosmoTribeCount>=2,'ボス勧誘率 +3ポイント','虫族または神秘族の実人数2人以上');break;
+    case 'テンタクル': A(true,'他の全員の通常消費 +50%／大成功率 +25ポイント');B(info.tentacleActive,'自身のEP +50%','軽減後の通常消費40以上のキャラがいる（追加消費を除く）');break;
+    case 'バーバリアン': A(first,'強化の石 −20%／自身の攻撃 +40%','先頭配置');B(info.barbarianActive,'探索時間 +20%／自身の攻撃 +30%',`全バーバリアン②なしの仮時間 ${Math.round((info.barbarianTimeRef||0)*100)}% / 110%以上`);break;
+    case 'シャグマタンゴ': A(true,'他の全員の通常消費 +50%／基本・追加勧誘率 −30ポイント／ボス討伐要求EP −12%');B(info.luck<=40&&members.some(x=>name(x)!=='シャグマタンゴ')?'end':false,'シャグマタンゴ以外の全員の元気 +10',`探索中合計幸運 ${info.luck} / 40以下`);break;
+    case 'アシュラ': A(info.lowMagic,'全員の攻撃 +12%','補正前魔法力が基本EP合計の20%以下');B(info.thresholdFactor>=1.1-1e-10,'大成功率 +20ポイント','最終到達度要求EP110%以上');break;
+    case 'クラッシャー': A(info.thresholdFactor>=1.5-1e-10,'自身の攻撃 +50%','最終到達度要求EP150%以上');B(first,'到達度要求EP +20%／探索時間 +20%／自身の攻撃 +50%','先頭配置');break;
+    case 'イーター': A(first,'通常アイテム獲得率 −100ポイント／到達度要求EP −10%','先頭配置');B(true,'基本資源 −50%／大成功率 +50ポイント');break;
+    case '陰陽百足': A(info.yinAttack,'探索時間 +50%／部隊EP +15%','補正前攻撃力合計＞魔法力合計');B(info.yinMagic,'探索時間 −50%／ボス討伐要求EP +15%','補正前魔法力合計＞攻撃力合計');break;
     case 'ヴァンパイア':A(true,'自身の通常消費元気 +100%／自身の実効EP +30%');B('end','自身の元気 +20','大成功時のみ');break;
    }
   }return result;
@@ -420,6 +443,7 @@ const ABILITY_ENGINE=(()=>{
    if(n==='マリアンヌ'){const target=members.find(x=>x.uid===info.marianneTargets?.[members.indexOf(u)]);if(target)add(target,(great?30:15)*k2,n+'②');else miss(u,'固有② 対象なし');}
    if(n==='ナイトローズ'){if(great){add(u,20*k2,n+'②');const ids=info.roseTargets?.[members.indexOf(u)]||[];members.filter(x=>ids.includes(x.uid)).forEach(x=>add(x,5*k2,n+'②'));}else miss(u,'固有② 大成功条件不成立');}
    if(n==='ティターニア'){if(members.every(x=>energyBefore[x.uid]/maxEnergy(x)<=.5))members.forEach(x=>add(x,6*k2,n+'②'));else miss(u,'固有② 全員元気50%以下の条件不成立');}
+   if(n==='シャグマタンゴ'){if(info.luck<=40)members.filter(x=>name(x)!=='シャグマタンゴ').forEach(x=>add(x,10*k2,n+'②'));else miss(u,'固有② 探索中合計幸運40以下の条件不成立');}
    if(n==='ファンガスタ'){const amount=info.fungastaRecovery?.[members.indexOf(u)]??0;if(amount)members.filter(x=>x!==u).forEach(x=>add(x,amount*k2,n+'②'));}
    if(n==='エメラルド'&&u!==members[0]){const cost=extraCost(members,u);const eligible=members.filter(x=>name(x)!=='エメラルド');if(energyBefore[u.uid]/maxEnergy(u)>=.5&&eligible.length&&energyBefore[u.uid]+costs.filter(e=>e.uid===u.uid).reduce((a,e)=>a+e.amount,0)>=cost){const min=Math.min(...eligible.map(x=>energyBefore[x.uid]));costs.push({uid:u.uid,amount:-cost,source:n+'①'});add(pick(eligible.filter(x=>energyBefore[x.uid]===min)),20,n+'①');}else miss(u,'固有① 条件不成立または対象なし');}
    if(n==='エタニティ'){u.cooldowns||={};if(members.some(x=>energyBefore[x.uid]<20)&&(u.cooldowns.eternity==null||ts-u.cooldowns.eternity>=24*3600000)){members.forEach(x=>add(x,maxEnergy(x)-energyBefore[x.uid],n+'①'));u.cooldowns.eternity=ts;}else miss(u,'固有① 元気20未満の対象なし、または24時間制限中');}
